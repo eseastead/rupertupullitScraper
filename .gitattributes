@@ -1,0 +1,7 @@
+# Tell GitHub these are raw data products, not software code
+car_inventory.json -diff merge=union
+diff_report.txt    -diff merge=union
+
+# Optional: Ensure GitHub doesn't misclassify your repo language based on data size
+car_inventory.json linguist-generated
+diff_report.txt    linguist-generated
