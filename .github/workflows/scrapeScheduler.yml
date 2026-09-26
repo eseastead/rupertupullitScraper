@@ -29,19 +29,17 @@ jobs:
       - name: Execute Script
         run: python processor.py
 
-      - name: Commit and Push JSON changes
+      - name: Commit and Push Data Products
         run: |
-          # 1. Configure a generic GitHub Actions bot identity
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@://github.com"
           
-          # 2. Track your generated file (Change "data.json" to your actual filename!)
-          git add data.json
+          # Stage both of your generated data files
+          git add car_inventory.json diff_report.txt
           
-          # 3. Only commit and push if the file actually changed today
           if git diff --staged --quiet; then
-            echo "No changes detected in the JSON file. Skipping push."
+            echo "No data changes detected today. Skipping push."
           else
-            git commit -m "Automated data sync: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+            git commit -m "Automated inventory sync: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             git push origin HEAD:${{ github.ref_name }}
           fi
