@@ -22,4 +22,4 @@ jobs:
         run: pip install -r requirements.txt
         
       - name: Execute Script
-        run: processor.py
+        run: python processor.py
