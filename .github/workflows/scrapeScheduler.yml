@@ -12,7 +12,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Crucial: This tells GitHub to allow the runner to push changes back to the repo
           token: ${{ secrets.GITHUB_TOKEN }}
         
       - name: Set up Python
@@ -29,12 +28,18 @@ jobs:
       - name: Execute Script
         run: python processor.py
 
+      - name: Upload Report to Discord
+        # This action automatically posts your text file to your server
+        uses: tsickert/discord-webhook@v7.0.0
+        with:
+          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+          filename: diff_report.txt
+
       - name: Commit and Push Data Products
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Stage both of your generated data files
           git add car_inventory.json diff_report.txt
           
           if git diff --staged --quiet; then
