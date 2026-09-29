@@ -74,13 +74,29 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@://github.com"
-          
+
+          PREVIOUS_INVENTORY_EMPTY=false
+
+          if git cat-file -e HEAD:car_inventory.json 2>/dev/null; then
+            if [ "$(git show HEAD:car_inventory.json | wc -c)" -eq 0 ]; then
+              PREVIOUS_INVENTORY_EMPTY=true
+            fi
+          else
+            PREVIOUS_INVENTORY_EMPTY=true
+          fi
+
           # Safely stage files only if they exist
           [ -f car_inventory.json ] && git add car_inventory.json
           [ -f diff_report.txt ] && git add diff_report.txt
-          
+
           if git diff --staged --quiet; then
-            echo "No data changes detected today. Skipping push."
+            if [ "$PREVIOUS_INVENTORY_EMPTY" = "true" ] && [ -f car_inventory.json ] && [ -s car_inventory.json ]; then
+              echo "Previous inventory was empty; forcing initial save."
+              git commit -m "Automated inventory sync: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
+              git push origin HEAD:${{ github.ref_name }}
+            else
+              echo "No data changes detected today. Skipping push."
+            fi
           else
             git commit -m "Automated inventory sync: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
             git push origin HEAD:${{ github.ref_name }}
