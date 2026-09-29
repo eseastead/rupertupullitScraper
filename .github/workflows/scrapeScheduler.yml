@@ -28,12 +28,47 @@ jobs:
       - name: Execute Script
         run: python processor.py
 
-      - name: Upload Report to Discord
+      - name: Send diff report to Discord
         if: ${{ hashFiles('diff_report.txt') != '' }}
-        uses: tsickert/discord-webhook@v7.0.0
-        with:
-          webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          filename: diff_report.txt
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+        run: |
+          if [ ! -s diff_report.txt ]; then
+            echo "diff_report.txt is empty; skipping Discord notification."
+            exit 0
+          fi
+
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+
+          webhook = os.environ["DISCORD_WEBHOOK"]
+          with open("diff_report.txt", "r", encoding="utf-8") as f:
+              report = f.read().strip()
+
+          if not report:
+              raise SystemExit(0)
+
+          payload = {
+              "content": (
+                  "**📊 Inventory Sync Report**\n"
+                  "```text\n"
+                  f"{report}\n"
+                  "```"
+              )
+          }
+
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps(payload).encode("utf-8"),
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+
+          with urllib.request.urlopen(req) as response:
+              response.read()
+          PY
 
       - name: Commit and Push Data Products
         run: |
