@@ -47,14 +47,11 @@ jobs:
     - name: Run inventory scraper script
       id: run_scraper
       run: |
-        echo "Running Python script with previous inventory from: ${{ steps.read_previous_inventory.outputs.previous_cars_filepath }}"
-        # Pass the filepath to the previous inventory as a command-line argument
-        # The script's JSON output will be captured
-        OUTPUT=$(python ${{ env.PYTHON_SCRIPT_NAME }} \
-          '${{ steps.read_previous_inventory.outputs.previous_cars_filepath }}')
-        
-        echo "$OUTPUT" > script_output.json
-        echo "Current inventory and diff report generated."
+        echo "::debug::Running Python script with previous inventory from: ${{ steps.read_previous_inventory.outputs.previous_cars_filepath }}"
+        # Execute the Python script, redirecting its stdout directly to script_output.json
+        python ${{ env.PYTHON_SCRIPT_NAME }} \
+          '${{ steps.read_previous_inventory.outputs.previous_cars_filepath }}' > script_output.json
+        echo "::debug::Python script output saved to script_output.json"
 
     - name: Clean up temporary previous inventory file
       run: |
