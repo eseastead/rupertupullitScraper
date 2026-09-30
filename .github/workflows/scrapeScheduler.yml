@@ -1,8 +1,5 @@
 ## GitHub Actions Workflow Configuration (`.github/workflows/scrape_inventory.yml`)
 
-Save the content below to `.github/workflows/scrape_inventory.yml` in your repository. Remember to replace `inventory_scraper.py` with the actual filename of your Python script (content of `ymUqaWGOrrj1`).
-
-```yaml
 name: Daily Car Inventory Scraper
 
 on:
