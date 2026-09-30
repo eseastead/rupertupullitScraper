@@ -7,8 +7,9 @@ import os
 from datetime import datetime
 
 # ==================== CONFIGURATION ====================
-# Updated URL to the AJAX endpoint
-URL = "https://rupertsupullit.com/wp-admin/admin-ajax.php"
+# Updated URLs for dynamic nonce retrieval and AJAX endpoint
+MAIN_SITE_URL = "https://rupertsupullit.com/"
+AJAX_URL = "https://rupertsupullit.com/wp-admin/admin-ajax.php"
 
 # Define the path for the JSON file to store car data
 CAR_DATA_FILE = 'car_inventory.json'
@@ -21,9 +22,32 @@ HEADERS = {
 }
 # =======================================================
 
-def fetch_inventory_html():
+def get_dynamic_nonce(main_site_url, headers):
+    """Fetches the main page and extracts the dynamic nonce using a robust search."""
+    print(f"[*] Attempting GET request to: {main_site_url} to retrieve nonce.")
+    try:
+        response = requests.get(main_site_url, headers=headers, timeout=15)
+        response.raise_for_status()
+        full_html = response.text
+
+        # Use regex to find the nonce value, which was previously found in group 3 of the regex.
+        # This pattern looks for '"nonce":"([a-f0-9]+)"' common in JS objects or AJAX data structures.
+        nonce_pattern = re.compile(r'"nonce":"([a-f0-9]+)"')
+        match = nonce_pattern.search(full_html)
+        if match:
+            dynamic_nonce = match.group(1)
+            print(f"[*] Successfully extracted dynamic nonce: {dynamic_nonce}")
+            return dynamic_nonce
+        else:
+            print("[-] Could not find the dynamic nonce on the page.")
+            return None
+    except requests.RequestException as e:
+        print(f"[-] Network connection error while fetching nonce: {e}")
+        return None
+
+def fetch_inventory_html(dynamic_nonce):
     """Fetches the live inventory webpage using a POST request with form parameters."""
-    print(f"[*] Attempting POST request to: {URL}") # For debugging
+    print(f"[*] Attempting POST request to: {AJAX_URL} with dynamic nonce.")
 
     # Form data provided by the user
     form_data = {
@@ -32,14 +56,14 @@ def fetch_inventory_html():
         'year_start': '1963',
         'year_end': '2026',
         'action': 'yardconnect_search_vehicles',
-        'nonce': 'eb3bd746d7', # Note: nonce might be dynamic and require dynamic extraction if this fails in the future.
+        'nonce': dynamic_nonce, # Use the dynamically fetched nonce
         'view': 'table',
         'length': '1000' # Request a large number of entries to ensure all are fetched
     }
 
     try:
         # Use a POST request with the form data
-        response = requests.post(URL, headers=HEADERS, data=form_data, timeout=15)
+        response = requests.post(AJAX_URL, headers=HEADERS, data=form_data, timeout=15)
         response.raise_for_status()
         return response.text
     except requests.RequestException as e:
@@ -61,8 +85,8 @@ def scan_and_extract_inventory(html):
             if rows:
                 print(f"[*] Found {len(rows)} car entries in total.")
                 for row in rows:
-                    cells = row.find_all("td")
-                    if cells and len(cells) >= 8: # Ensure enough cells are present
+                    cells = row.find_all("td") 
+                    if cells and len(cells) >= 8:
                         car_data = {
                             "Thumbnail": cells[0].find("img")['src'] if cells[0].find("img") else "N/A",
                             "Make": cells[1].get_text(strip=True),
@@ -83,10 +107,6 @@ def scan_and_extract_inventory(html):
             print("[-] No <tbody> found within the inventory table.")
     else:
         print("[-] Could not find the inventory table with class 'yardconnect-vehicles-table'.")
-        print("[*] This might indicate a change in the website structure. Printing full HTML response for inspection (truncated):")
-        print("-" * 75)
-        print(html[:1000]) # Print first 1000 chars for inspection
-        print("-" * 75)
     return all_cars_data
 
 def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
@@ -145,3 +165,73 @@ def compute_car_diff(previous_cars, current_cars):
             removed_cars.append(previous_car)
 
     return added_cars, removed_cars, modified_cars
+
+def generate_diff_report(added_cars, removed_cars, modified_cars):
+    """Generates a human-readable diff report string."""
+    report_lines = []
+    report_lines.append(f"--- Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---")
+
+    if added_cars:
+        report_lines.append(f"\n[*] {len(added_cars)} new cars added:")
+        for car in added_cars:
+            report_lines.append(f"    + {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})") # Include Date Set for better identification
+
+    if removed_cars:
+        report_lines.append(f"\n[*] {len(removed_cars)} cars removed:")
+        for car in removed_cars:
+            report_lines.append(f"    - {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})") # Include Date Set
+
+    if modified_cars:
+        report_lines.append(f"\n[*] {len(modified_cars)} cars modified:")
+        for change in modified_cars:
+            report_lines.append(f"    ~ {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} (Date Set: {change['current']['Date Set']})") # Include Date Set
+            for field, current_value in change['current'].items():
+                if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail', 'Date Set'] and change['previous'].get(field) != current_value:
+                    report_lines.append(f"        - {field}: {change['previous'].get(field)}")
+                    report_lines.append(f"        + {field}: {current_value}")
+
+    if not (added_cars or removed_cars or modified_cars):
+        report_lines.append("\n[*] No changes detected in the inventory.")
+
+    report_lines.append("------------------------------------------")
+    return "\n".join(report_lines)
+
+def process_inventory_update(previous_cars_json_str=None):
+    """
+    Fetches current car inventory, compares it with previous inventory,
+    and returns the current inventory JSON string and a diff report string.
+
+    Args:
+        previous_cars_json_str (str, optional): A JSON string representing the
+                                                 previous car inventory. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing:
+               - current_cars_json_str (str): JSON string of the current car inventory.
+               - diff_report_str (str): A human-readable string summarizing the changes.
+    """
+    previous_cars = []
+    if previous_cars_json_str:
+        try:
+            previous_cars = json.loads(previous_cars_json_str)
+            print(f"[*] Loaded {len(previous_cars)} previous car entries from input JSON string.")
+        except json.JSONDecodeError as e:
+            print(f"[-] Error decoding previous_cars_json_str: {e}. Proceeding without previous data.")
+
+    dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_URL, HEADERS)
+    if not dynamic_nonce_value:
+        return json.dumps(previous_cars), "Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory."
+
+    html = fetch_inventory_html(dynamic_nonce_value)
+    if not html:
+        return json.dumps(previous_cars), "Error: Failed to fetch inventory HTML."
+
+    current_cars = scan_and_extract_inventory(html)
+
+    if not previous_cars:
+        diff_report_str = f"[*] No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
+    else:
+        added, removed, modified = compute_car_diff(previous_cars, current_cars)
+        diff_report_str = generate_diff_report(added, removed, modified)
+
+    return json.dumps(current_cars), diff_report_str
