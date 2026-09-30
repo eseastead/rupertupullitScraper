@@ -85,7 +85,7 @@ def scan_and_extract_inventory(html):
             if rows:
                 # print(f"[*] Found {len(rows)} car entries in total.")
                 for row in rows:
-                    cells = row.find_all("td") 
+                    cells = row.find_all("td")
                     if cells and len(cells) >= 8:
                         car_data = {
                             "Thumbnail": cells[0].find("img")['src'] if cells[0].find("img") else "N/A",
@@ -203,13 +203,13 @@ def generate_diff_report(added_cars, removed_cars, modified_cars):
     report_lines.append("------------------------------------------")
     return "\n".join(report_lines)
 
-def process_inventory_update(previous_cars_json_str=None):
+def process_inventory_update(previous_cars_filepath=None):
     """
     Fetches current car inventory, compares it with previous inventory,
     and returns the current inventory (list of dicts) and a diff report string.
 
     Args:
-        previous_cars_json_str (str, optional): A JSON string representing the
+        previous_cars_filepath (str, optional): A file path to a JSON file representing the
                                                  previous car inventory. Defaults to None.
 
     Returns:
@@ -218,12 +218,15 @@ def process_inventory_update(previous_cars_json_str=None):
                - diff_report_str (str): A human-readable string summarizing the changes.
     """
     previous_cars = []
-    if previous_cars_json_str:
+    if previous_cars_filepath and os.path.exists(previous_cars_filepath):
         try:
-            previous_cars = json.loads(previous_cars_json_str)
-            # print(f"[*] Loaded {len(previous_cars)} previous car entries from input JSON string.")
-        except json.JSONDecodeError as e:
-            sys.stderr.write(f"[-] Error decoding previous_cars_json_str: {e}. Proceeding without previous data.\n")
+            with open(previous_cars_filepath, 'r') as f:
+                previous_cars = json.load(f)
+            # print(f"[*] Loaded {len(previous_cars)} previous car entries from file: {previous_cars_filepath}.")
+        except (json.JSONDecodeError, IOError) as e:
+            sys.stderr.write(f"[-] Error loading or decoding previous car data from {previous_cars_filepath}: {e}. Proceeding without previous data.\n")
+    elif previous_cars_filepath: # Path was provided but file does not exist
+        sys.stderr.write(f"[-] Previous inventory file not found at {previous_cars_filepath}. Proceeding without previous data.\n")
 
     dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_URL, HEADERS)
     if not dynamic_nonce_value:
@@ -247,12 +250,12 @@ def process_inventory_update(previous_cars_json_str=None):
 
 # --- Command-line execution for GitHub Actions ---
 if __name__ == "__main__":
-    previous_cars_json_input = None
-    # Check if previous_cars_json_str is passed as a command-line argument
+    previous_cars_filepath_input = None
+    # Check if a filepath for previous_cars is passed as a command-line argument
     if len(sys.argv) > 1:
-        previous_cars_json_input = sys.argv[1]
+        previous_cars_filepath_input = sys.argv[1]
 
-    current_cars_data, diff_report_output = process_inventory_update(previous_cars_json_input)
+    current_cars_data, diff_report_output = process_inventory_update(previous_cars_filepath_input)
 
     # Prepare output as a JSON object for easy parsing by GitHub Actions
     # This JSON object will be printed to stdout.
