@@ -1,6 +1,7 @@
 import sys
 import os
 import re
+import json # Import json for json.dumps
 
 def format_discord_message(diff_report_raw):
     formatted_lines = []
@@ -91,10 +92,11 @@ def format_discord_message(diff_report_raw):
 
     discord_message_content = "\n".join(formatted_lines)
 
-    # Output using GitHub Actions GITHUB_OUTPUT format
-    print(f"discord_message_content<<EOF_MSG")
-    print(discord_message_content)
-    print(f"EOF_MSG")
+    # JSON-escape the message content for safe passing through GITHUB_OUTPUT
+    json_safe_discord_message_content = json.dumps(discord_message_content)
+
+    # Output as a single line to GITHUB_OUTPUT
+    print(f"discord_message_content={json_safe_discord_message_content}")
     print(f"changes_detected={'true' if changes_detected else 'false'}")
 
 
