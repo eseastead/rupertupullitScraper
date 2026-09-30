@@ -1,115 +1,265 @@
 import sys
-import os
+import requests
+from bs4 import BeautifulSoup
+import json
 import re
+import os
+from datetime import datetime
 
-def format_discord_message(diff_report_raw):
-    formatted_lines = []
-    changes_detected = False
+# ==================== CONFIGURATION ====================
+# Updated URLs for dynamic nonce retrieval and AJAX endpoint
+MAIN_SITE_URL = "https://rupertsupullit.com/"
+AJAX_URL = "https://rupertsupullit.com/wp-admin/admin-ajax.php"
 
-    # Process header
-    header = ''
-    for line in diff_report_raw.splitlines():
-        if line.startswith('REPORT_HEADER:'):
-            header = line.replace('REPORT_HEADER: ', '', 1)
-            formatted_lines.append(f"Report: {header}") # Plain text header
-            break
+# Define the path for the JSON file to store car data
+CAR_DATA_FILE = 'car_inventory.json'
 
-    added_items = []
-    removed_items = []
-    modified_items = []
-    modified_details = {}
+# Define the path for the diff report output file
+DIFF_OUTPUT_FILE = 'diff_report.txt'
 
-    added_count = 0
-    removed_count = 0
-    modified_count = 0
-    no_changes_msg = ""
-    initial_load_msg = ""
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+}
+# =======================================================
 
-    current_modified_item_key = None
+def get_dynamic_nonce(main_site_url, headers):
+    """Fetches the main page and extracts the dynamic nonce using a robust search."""
+    sys.stderr.write(f"[*] Attempting GET request to: {main_site_url} to retrieve nonce.\n")
+    try:
+        response = requests.get(main_site_url, headers=headers, timeout=15)
+        response.raise_for_status()
+        full_html = response.text
 
-    for line in diff_report_raw.splitlines():
-        if line.startswith('ADDED_COUNT:'):
-            added_count = int(line.replace('ADDED_COUNT: ', '', 1))
-        elif line.startswith('ADDED_ITEM:'):
-            added_items.append(line.replace('ADDED_ITEM: ', '', 1))
-        elif line.startswith('REMOVED_COUNT:'):
-            removed_count = int(line.replace('REMOVED_COUNT: ', '', 1))
-        elif line.startswith('REMOVED_ITEM:'):
-            removed_items.append(line.replace('REMOVED_ITEM: ', '', 1))
-        elif line.startswith('MODIFIED_COUNT:'):
-            modified_count = int(line.replace('MODIFIED_COUNT: ', '', 1))
-        elif line.startswith('MODIFIED_ITEM:'):
-            item_key = line.replace('MODIFIED_ITEM: ', '', 1)
-            modified_items.append(item_key)
-            modified_details[item_key] = []
-            current_modified_item_key = item_key # Set current item for details
-        elif line.startswith('MODIFIED_DETAIL:'):
-            if current_modified_item_key:
-                detail_line = line.replace('MODIFIED_DETAIL:   ', '', 1)
-                match = re.match(r'([^:]+): (.+) -> (.+)', detail_line)
-                if match:
-                    field, old_val, new_val = match.groups()
-                    # Plain text for modified details
-                    modified_details[current_modified_item_key].append(f"  Detail, {field}, {old_val}, {new_val}")
-                else:
-                    modified_details[current_modified_item_key].append(f"  Detail, {detail_line}") # Fallback
-        elif line.startswith('NO_CHANGES:'):
-            no_changes_msg = line.replace('NO_CHANGES: ', '', 1)
-        elif line.startswith('INITIAL_LOAD:'):
-            initial_load_msg = line.replace('INITIAL_LOAD: ', '', 1)
+        # Use regex to find the nonce value, which was previously found in group 3 of the regex.
+        # This pattern looks for '"nonce":"([a-f0-9]+)"' common in JS objects or AJAX data structures.
+        nonce_pattern = re.compile(r'"nonce":"([a-f0-9]+)"')
+        match = nonce_pattern.search(full_html)
+        if match:
+            dynamic_nonce = match.group(1)
+            sys.stderr.write(f"[*] Successfully extracted dynamic nonce: {dynamic_nonce}\n")
+            return dynamic_nonce
+        else:
+            sys.stderr.write("[-] Could not find the dynamic nonce on the page.\n")
+            return None
+    except requests.RequestException as e:
+        sys.stderr.write(f"[-] Network connection error while fetching nonce: {e}\n")
+        return None
 
-    if added_count > 0:
-        formatted_lines.append("")
-        formatted_lines.append(f"New Cars Added: {added_count}") # Plain text
-        changes_detected = True
-        for item in added_items:
-            formatted_lines.append(f"Added, {item}") # Comma-separated
+def fetch_inventory_html(dynamic_nonce):
+    """Fetches the live inventory webpage using a POST request with form parameters."""
+    sys.stderr.write(f"[*] Attempting POST request to: {AJAX_URL} with dynamic nonce.\n")
 
-    if removed_count > 0:
-        formatted_lines.append("")
-        formatted_lines.append(f"Cars Removed: {removed_count}") # Plain text
-        changes_detected = True
-        for item in removed_items:
-            formatted_lines.append(f"Removed, {item}") # Comma-separated
+    # Form data provided by the user
+    form_data = {
+        'make': '',
+        'model': '',
+        'year_start': '1963',
+        'year_end': '2026',
+        'action': 'yardconnect_search_vehicles',
+        'nonce': dynamic_nonce, # Use the dynamically fetched nonce
+        'view': 'table',
+        'length': '1000' # Request a large number of entries to ensure all are fetched
+    }
 
-    if modified_count > 0:
-        formatted_lines.append("")
-        formatted_lines.append(f"Cars Modified: {modified_count}") # Plain text
-        changes_detected = True
-        for item_key in modified_items:
-            formatted_lines.append(f"Modified, {item_key}") # Comma-separated
-            for detail in modified_details.get(item_key, []):
-                formatted_lines.append(detail)
+    try:
+        # Use a POST request with the form data
+        response = requests.post(AJAX_URL, headers=HEADERS, data=form_data, timeout=15)
+        response.raise_for_status()
+        return response.text
+    except requests.RequestException as e:
+        sys.stderr.write(f"[-] Network connection error: {e}\n")
+        return None
 
-    if no_changes_msg:
-        formatted_lines.append("")
-        formatted_lines.append(f"{no_changes_msg}") # Plain text
+def scan_and_extract_inventory(html):
+    """Parses the inventory table and extracts all car details into a list of dictionaries."""
+    soup = BeautifulSoup(html, "html.parser")
+    all_cars_data = []
 
-    if initial_load_msg:
-        formatted_lines.append("")
-        formatted_lines.append(f"Initial Inventory Load") # Plain text header
-        formatted_lines.append(f"{initial_load_msg}") # Plain text
+    inventory_table = soup.find("table", class_="yardconnect-vehicles-table")
 
-    discord_message_content = "\n".join(formatted_lines)
+    if inventory_table:
+        sys.stderr.write("[_] Found the inventory table. Extracting all car data...\n")
+        tbody = inventory_table.find("tbody")
+        if tbody:
+            rows = tbody.find_all("tr")
+            if rows:
+                sys.stderr.write(f"[_] Found {len(rows)} car entries in total.\n")
+                for row in rows:
+                    cells = row.find_all("td")
+                    if cells and len(cells) >= 8:
+                        car_data = {
+                            "Thumbnail": cells[0].find("img")['src'] if cells[0].find("img") else "N/A",
+                            "Make": cells[1].get_text(strip=True),
+                            "Model": cells[2].get_text(strip=True),
+                            "Year": cells[3].get_text(strip=True),
+                            "Body Style": cells[4].get_text(strip=True),
+                            "Engine": cells[5].get_text(strip=True),
+                            "Yard Row": cells[6].get_text(strip=True),
+                            "Date Set": cells[7].get_text(strip=True)
+                        }
+                        all_cars_data.append(car_data)
+                    elif cells:
+                        sys.stderr.write(f"[!] Warning: Insufficient data columns for a row: {[cell.get_text(strip=True) for cell in cells]}\n")
+                        pass
+                sys.stderr.write(f"[_] Successfully extracted {len(all_cars_data)} car entries.\n")
+            else:
+                sys.stderr.write("[-] No <tr> elements found within the <tbody> of the inventory table.\n")
+                pass
+        else:
+            sys.stderr.write("[-] No <tbody> found within the inventory table.\n")
+            pass
+    else:
+        sys.stderr.write("[-] Could not find the inventory table with class 'yardconnect-vehicles-table'.\n")
+        pass
+    return all_cars_data
 
-    # Output to GITHUB_OUTPUT using multiline syntax
-    print(f"discord_message_content<<EOF_DISCORD_MESSAGE")
-    print(discord_message_content) # This is the raw markdown string
-    print(f"EOF_DISCORD_MESSAGE")
-    print(f"changes_detected={'true' if changes_detected else 'false'}")
+def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
+    """Saves a list of car dictionaries to a JSON file."""
+    try:
+        with open(filename, 'w') as f:
+            json.dump(cars_data, f, indent=4)
+        sys.stderr.write(f"[_] Car data saved to {filename}\n")
+    except IOError as e:
+        sys.stderr.write(f"[-] Error saving car data to JSON: {e}\n")
+        pass
 
+def load_cars_from_json(filename=CAR_DATA_FILE):
+    """Loads car data from a JSON file."""
+    if os.path.exists(filename):
+        try:
+            with open(filename, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError as e:
+            sys.stderr.write(f"[-] Error decoding JSON from {filename}: {e}\n")
+            pass
+        except IOError as e:
+            sys.stderr.write(f"[-] Error loading car data from JSON: {e}\n")
+            pass
+    return []
 
+def get_car_unique_key(car):
+    """Generates a unique key for a car based on stable attributes."""
+    return f"{car['Make']}-{car['Model']}-{car['Year']}-{car['Yard Row']}"
+
+def compute_car_diff(previous_cars, current_cars):
+    """Compares two lists of car dictionaries and returns added, removed, and modified cars."""
+    previous_map = {get_car_unique_key(car): car for car in previous_cars}
+    current_map = {get_car_unique_key(car): car for car in current_cars}
+
+    added_cars = []
+    removed_cars = []
+    modified_cars = []
+
+    # Check for added and modified cars
+    for key, current_car in current_map.items():
+        if key not in previous_map:
+            added_cars.append(current_car)
+        else:
+            previous_car = previous_map[key]
+            # Compare relevant fields to detect modifications
+            diff_found = False
+            for field, value in current_car.items():
+                # Exclude thumbnail from diff comparison as its URL might change for same car
+                if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail'] and previous_car.get(field) != value:
+                    diff_found = True
+                    break
+            if diff_found:
+                modified_cars.append({'previous': previous_car, 'current': current_car})
+
+    # Check for removed cars
+    for key, previous_car in previous_map.items():
+        if key not in current_map:
+            removed_cars.append(previous_car)
+
+    return added_cars, removed_cars, modified_cars
+
+def generate_diff_report(added_cars, removed_cars, modified_cars):
+    """Generates a plain-text diff report string suitable for external formatting."""
+    report_lines = []
+    report_lines.append(f"REPORT_HEADER: Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
+
+    if added_cars:
+        report_lines.append(f"ADDED_COUNT: {len(added_cars)}")
+        for car in added_cars:
+            report_lines.append(f"ADDED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
+
+    if removed_cars:
+        report_lines.append(f"REMOVED_COUNT: {len(removed_cars)}")
+        for car in removed_cars:
+            report_lines.append(f"REMOVED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
+
+    if modified_cars:
+        report_lines.append(f"MODIFIED_COUNT: {len(modified_cars)}")
+        for change in modified_cars:
+            report_lines.append(f"MODIFIED_ITEM: {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} | Date Set: {change['current']['Date Set']}")
+            for field, current_value in change['current'].items():
+                if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail', 'Date Set'] and change['previous'].get(field) != current_value:
+                    report_lines.append(f"MODIFIED_DETAIL:   {field}: {change['previous'].get(field)} -> {current_value}")
+
+    if not (added_cars or removed_cars or modified_cars):
+        report_lines.append("NO_CHANGES: No changes detected in the inventory.")
+
+    return "\n".join(report_lines)
+
+def process_inventory_update(previous_cars_filepath=None):
+    """
+    Fetches current car inventory, compares it with previous inventory,
+    and returns the current inventory (list of dicts) and a diff report string.
+
+    Args:
+        previous_cars_filepath (str, optional): A file path to a JSON file representing the
+                                                 previous car inventory. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing:
+               - current_cars (list): List of dictionaries for the current car inventory.
+               - diff_report_str (str): A human-readable string summarizing the changes.
+    """
+    previous_cars = []
+    if previous_cars_filepath and os.path.exists(previous_cars_filepath):
+        try:
+            with open(previous_cars_filepath, 'r') as f:
+                previous_cars = json.load(f)
+            sys.stderr.write(f"[_] Loaded {len(previous_cars)} previous car entries from file: {previous_cars_filepath}.\n")
+        except (json.JSONDecodeError, IOError) as e:
+            sys.stderr.write(f"[-] Error loading or decoding previous car data from {previous_cars_filepath}: {e}. Proceeding without previous data.\n")
+    elif previous_cars_filepath: # Path was provided but file does not exist
+        sys.stderr.write(f"[-] Previous inventory file not found at {previous_cars_filepath}. Proceeding without previous data.\n")
+
+    dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_URL, HEADERS)
+    if not dynamic_nonce_value:
+        sys.stderr.write("[-] Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory.\n")
+        return previous_cars, "Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory."
+
+    html = fetch_inventory_html(dynamic_nonce_value)
+    if not html:
+        sys.stderr.write("[-] Error: Failed to fetch inventory HTML.\n")
+        return previous_cars, "Error: Failed to fetch inventory HTML."
+
+    current_cars = scan_and_extract_inventory(html)
+
+    if not previous_cars:
+        diff_report_str = f"INITIAL_LOAD: No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
+    else:
+        added, removed, modified = compute_car_diff(previous_cars, current_cars)
+        diff_report_str = generate_diff_report(added, removed, modified)
+
+    return current_cars, diff_report_str
+
+# --- Command-line execution for GitHub Actions ---
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        sys.stderr.write("Usage: python format_discord_message.py <diff_report_filepath>\n")
-        sys.exit(1)
+    previous_cars_filepath_input = None
+    # Check if a filepath for previous_cars is passed as a command-line argument
+    if len(sys.argv) > 1:
+        previous_cars_filepath_input = sys.argv[1]
 
-    diff_report_filepath = sys.argv[1]
-    if not os.path.exists(diff_report_filepath):
-        sys.stderr.write(f"Error: Diff report file not found at {diff_report_filepath}\n")
-        sys.exit(1)
+    current_cars_data, diff_report_output = process_inventory_update(previous_cars_filepath_input)
 
-    with open(diff_report_filepath, 'r') as f:
-        diff_report_content = f.read()
-
-    format_discord_message(diff_report_content)
+    # Prepare output as a JSON object for easy parsing by GitHub Actions
+    # This JSON object will be printed to stdout.
+    output = {
+        "current_inventory": current_cars_data,
+        "diff_report": diff_report_output
+    }
+    print(json.dumps(output))
+    sys.stderr.write("Script finished execution.\n")
