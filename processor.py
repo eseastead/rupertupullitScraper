@@ -226,7 +226,7 @@ def process_inventory_update(previous_cars_filepath=None):
     elif previous_cars_filepath: # Path was provided but file does not exist
         sys.stderr.write(f"[-] Previous inventory file not found at {previous_cars_filepath}. Proceeding without previous data.\n")
 
-    dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_url, HEADERS)
+    dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_URL, HEADERS)
     if not dynamic_nonce_value:
         sys.stderr.write("[-] Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory.\n")
         return previous_cars, "Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory."
