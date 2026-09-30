@@ -127,4 +127,3 @@ jobs:
       with:
         webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
         content: "**Car Inventory Update Detected!**\n\n```\n${{ steps.parse_output.outputs.diff_report_str }}\n```"
-```
