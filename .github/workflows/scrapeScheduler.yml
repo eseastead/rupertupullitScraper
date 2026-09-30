@@ -1,3 +1,8 @@
+## GitHub Actions Workflow Configuration (`.github/workflows/scrape_inventory.yml`)
+
+Save the content below to `.github/workflows/scrape_inventory.yml` in your repository. Remember to replace `inventory_scraper.py` with the actual filename of your Python script (content of `ymUqaWGOrrj1`).
+
+```yaml
 name: Daily Car Inventory Scraper
 
 on:
@@ -25,30 +30,44 @@ jobs:
     - name: Install dependencies
       run: |
         pip install requests beautifulsoup4
+        # jq is needed for parsing JSON output from the script
+        sudo apt-get update && sudo apt-get install -y jq
 
     - name: Read previous inventory or initialize empty
       id: read_previous_inventory
       run: |
+        TEMP_FILE="previous_inventory_temp.json"
         if [ -f "${{ env.CAR_DATA_FILE }}" ]; then
-          PREVIOUS_CARS=$(cat ${{ env.CAR_DATA_FILE }})
+          echo "Reading existing ${{ env.CAR_DATA_FILE }} for previous inventory."
+          cat ${{ env.CAR_DATA_FILE }} > "$TEMP_FILE"
         else
-          PREVIOUS_CARS="[]"
+          echo "${{ env.CAR_DATA_FILE }} not found. Initializing empty inventory."
+          echo "[]" > "$TEMP_FILE"
         fi
-        # FIX: Corrected output variable name
-        echo "previous_cars_json=$PREVIOUS_CARS" >> "$GITHUB_OUTPUT"
+        echo "previous_cars_filepath=$TEMP_FILE" >> "$GITHUB_OUTPUT"
+        echo "Previous inventory prepared in $TEMP_FILE"
       env:
         CAR_DATA_FILE: car_inventory.json # Use the CAR_DATA_FILE constant from your script
 
     - name: Run inventory scraper script
       id: run_scraper
       run: |
-        # Pass the previous_cars_json as a command-line argument to the Python script
+        echo "Running Python script with previous inventory from: ${{ steps.read_previous_inventory.outputs.previous_cars_filepath }}"
+        # Pass the filepath to the previous inventory as a command-line argument
         # The script's JSON output will be captured
         OUTPUT=$(python ${{ env.PYTHON_SCRIPT_NAME }} \
-          '${{ steps.read_previous_inventory.outputs.previous_cars_json }}')
+          '${{ steps.read_previous_inventory.outputs.previous_cars_filepath }}')
         
         echo "$OUTPUT" > script_output.json
         echo "Current inventory and diff report generated."
+
+    - name: Clean up temporary previous inventory file
+      run: |
+        TEMP_FILE="previous_inventory_temp.json"
+        if [ -f "$TEMP_FILE" ]; then
+          rm "$TEMP_FILE"
+          echo "Cleaned up $TEMP_FILE"
+        fi
 
     - name: Parse script output
       id: parse_output
@@ -62,16 +81,19 @@ jobs:
 
     - name: Save current inventory to file
       run: |
+        echo "Saving current inventory to ${{ env.CAR_DATA_FILE }}"
         echo '${{ steps.parse_output.outputs.current_inventory_json }}' > car_inventory.json
+      env:
+        CAR_DATA_FILE: car_inventory.json
 
     - name: Commit and push changes if any
       run: |
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Diagnostic checks and more robust commit/push logic
+        echo "Checking for changes in car_inventory.json..."
         if [ -f "car_inventory.json" ]; then
-          echo "car_inventory.json exists locally after being written."
+          echo "car_inventory.json exists locally after being written." >&2
         else
           echo "Error: car_inventory.json does NOT exist locally after being written! Cannot commit." >&2
           exit 1 # Fail the step
@@ -93,7 +115,7 @@ jobs:
             if [ $? -eq 0 ]; then # Check if push was successful
               echo "Successfully committed and pushed car_inventory.json."
             else
-              echo "Error: Git push failed. Check repository permissions." >&2
+              echo "Error: Git push failed. Check repository permissions or token scopes." >&2
               exit 1 # Fail the step
             fi
           else
@@ -108,3 +130,4 @@ jobs:
       with:
         webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
         content: "**Car Inventory Update Detected!**\n\n```\n${{ steps.parse_output.outputs.diff_report_str }}\n```"
+```
