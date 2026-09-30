@@ -70,117 +70,27 @@ jobs:
         CURRENT_INVENTORY=$(jq -c '.current_inventory' script_output.json)
         DIFF_REPORT=$(jq -r '.diff_report' script_output.json)
         
+        # Create a temporary file for the raw diff report to pass to the Python formatter
+        DIFF_REPORT_TEMP_FILE="raw_diff_report.txt"
+        echo "$DIFF_REPORT" > "$DIFF_REPORT_TEMP_FILE"
+
         echo "current_inventory_json=$CURRENT_INVENTORY" >> "$GITHUB_OUTPUT"
-        echo "diff_report_str<<EOF" >> "$GITHUB_OUTPUT"
-        echo "$DIFF_REPORT" >> "$GITHUB_OUTPUT"
-        echo "EOF" >> "$GITHUB_OUTPUT"
+        echo "diff_report_filepath=$DIFF_REPORT_TEMP_FILE" >> "$GITHUB_OUTPUT"
       shell: bash
 
     - name: Format Discord message
       id: format_discord_message
       run: |
-        DIFF_REPORT_RAW="${{ steps.parse_output.outputs.diff_report_str }}"
-        
-        declare -a FORMATTED_LINES
-        CHANGES_DETECTED=false
-
-        IFS=$'\n' # Set Internal Field Separator to newline to read lines correctly
-        
-        # Process header
-        HEADER_LINE=$(echo "$DIFF_REPORT_RAW" | grep '^REPORT_HEADER:')
-        if [ -n "$HEADER_LINE" ]; then
-          HEADER=$(echo "$HEADER_LINE" | sed 's/^REPORT_HEADER: //')
-          FORMATTED_LINES+=("### $HEADER")
-        fi
-
-        # Process new cars
-        ADDED_COUNT_LINE=$(echo "$DIFF_REPORT_RAW" | grep '^ADDED_COUNT:')
-        if [[ "$ADDED_COUNT_LINE" =~ ^ADDED_COUNT:([0-9]+) ]]; then
-          ADDED_COUNT="${BASH_REMATCH[1]}"
-          if [ "$ADDED_COUNT" -gt 0 ]; then
-            FORMATTED_LINES+=("") # Blank line for spacing
-            FORMATTED_LINES+=("**New Cars Added: $ADDED_COUNT**")
-            CHANGES_DETECTED=true
-            ADDED_ITEMS=$(echo "$DIFF_REPORT_RAW" | grep '^ADDED_ITEM:')
-            if [ -n "$ADDED_ITEMS" ]; then
-              echo "$ADDED_ITEMS" | sed 's/^ADDED_ITEM: /- **+** /' | while read -r line; do
-                FORMATTED_LINES+=("$line")
-              done
-            fi
-          fi
-        fi
-
-        # Process removed cars
-        REMOVED_COUNT_LINE=$(echo "$DIFF_REPORT_RAW" | grep '^REMOVED_COUNT:')
-        if [[ "$REMOVED_COUNT_LINE" =~ ^REMOVED_COUNT:([0-9]+) ]]; then
-          REMOVED_COUNT="${BASH_REMATCH[1]}"
-          if [ "$REMOVED_COUNT" -gt 0 ]; then
-            FORMATTED_LINES+=("") # Blank line for spacing
-            FORMATTED_LINES+=("**Cars Removed: $REMOVED_COUNT**")
-            CHANGES_DETECTED=true
-            REMOVED_ITEMS=$(echo "$DIFF_REPORT_RAW" | grep '^REMOVED_ITEM:')
-            if [ -n "$REMOVED_ITEMS" ]; then
-              echo "$REMOVED_ITEMS" | sed 's/^REMOVED_ITEM: /- **-** /' | while read -r line; do
-                FORMATTED_LINES+=("$line")
-              done
-            fi
-          fi
-        fi
-
-        # Process modified cars
-        MODIFIED_COUNT_LINE=$(echo "$DIFF_REPORT_RAW" | grep '^MODIFIED_COUNT:')
-        if [[ "$MODIFIED_COUNT_LINE" =~ ^MODIFIED_COUNT:([0-9]+) ]]; then
-          MODIFIED_COUNT="${BASH_REMATCH[1]}"
-          if [ "$MODIFIED_COUNT" -gt 0 ]; then
-            FORMATTED_LINES+=("") # Blank line for spacing
-            FORMATTED_LINES+=("**Cars Modified: $MODIFIED_COUNT**")
-            CHANGES_DETECTED=true
-            
-            # Extract modified items and details together to maintain order
-            MODIFIED_BLOCK=$(echo "$DIFF_REPORT_RAW" | grep -E '^(MODIFIED_ITEM:|MODIFIED_DETAIL:)' )
-            if [ -n "$MODIFIED_BLOCK" ]; then
-                echo "$MODIFIED_BLOCK" | while read -r item_or_detail_line; do
-                    if [[ "$item_or_detail_line" =~ ^MODIFIED_ITEM: ]]; then
-                        FORMATTED_LINES+=("- **~** $(echo "$item_or_detail_line" | sed 's/^MODIFIED_ITEM: //')")
-                    elif [[ "$item_or_detail_line" =~ ^MODIFIED_DETAIL: ]]; then
-                        DETAIL_LINE=$(echo "$item_or_detail_line" | sed -E 's/^MODIFIED_DETAIL:[[:space:]]+([^:]+): (.+) -> (.+)/  - *\\1*: Changed from `\\2` to `\\3`/')
-                        FORMATTED_LINES+=("$DETAIL_LINE")
-                    fi
-                done
-            fi
-          fi
-        fi
-
-        # Process no changes
-        NO_CHANGES_LINE=$(echo "$DIFF_REPORT_RAW" | grep '^NO_CHANGES:')
-        if [ -n "$NO_CHANGES_LINE" ]; then
-          NO_CHANGES=$(echo "$NO_CHANGES_LINE" | sed 's/^NO_CHANGES: //')
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("*$NO_CHANGES*")
-        fi
-
-        # Process initial load
-        INITIAL_LOAD_LINE=$(echo "$DIFF_REPORT_RAW" | grep '^INITIAL_LOAD:')
-        if [ -n "$INITIAL_LOAD_LINE" ]; then
-          INITIAL_LOAD=$(echo "$INITIAL_LOAD_LINE" | sed 's/^INITIAL_LOAD: //')
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("### Initial Inventory Load")
-          FORMATTED_LINES+=("* $INITIAL_LOAD")
-        fi
-        
-        unset IFS # Restore IFS
-
-        # Join the array elements with newline for the final message
-        printf -v DISCORD_MESSAGE '%s\n' "${FORMATTED_LINES[@]}"
-        
-        # Output the formatted message
-        echo "discord_message_content<<EOF_MSG" >> "$GITHUB_OUTPUT"
-        echo -e "${DISCORD_MESSAGE}" >> "$GITHUB_OUTPUT"
-        echo "EOF_MSG" >> "$GITHUB_OUTPUT"
-        
-        # Also output the CHANGES_DETECTED flag for conditional Discord notification
-        echo "changes_detected=$CHANGES_DETECTED" >> "$GITHUB_OUTPUT"
+        python format_discord_message.py ${{ steps.parse_output.outputs.diff_report_filepath }}
       shell: bash
+
+    - name: Clean up raw diff report file
+      run: |
+        DIFF_REPORT_TEMP_FILE="raw_diff_report.txt"
+        if [ -f "$DIFF_REPORT_TEMP_FILE" ]; then
+          rm "$DIFF_REPORT_TEMP_FILE"
+          echo "Cleaned up $DIFF_REPORT_TEMP_FILE"
+        fi
 
     - name: Save current inventory to file
       run: |
