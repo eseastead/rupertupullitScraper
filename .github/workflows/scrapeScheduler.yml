@@ -84,63 +84,57 @@ jobs:
         # Initialize an empty array for formatted lines
         declare -a FORMATTED_LINES
         
-        # Process header
-        HEADER=$(echo "$DIFF_REPORT_RAW" | grep '^REPORT_HEADER:' | sed 's/^REPORT_HEADER: //')
-        if [ -n "$HEADER" ]; then
-          FORMATTED_LINES+=("### $HEADER")
-        fi
+        # Flag to track if any actual changes were reported (excluding initial load/no changes)
+        CHANGES_DETECTED=false
 
-        # Process new cars
-        ADDED_COUNT=$(echo "$DIFF_REPORT_RAW" | grep '^ADDED_COUNT:' | sed 's/^ADDED_COUNT: //')
-        if [ -n "$ADDED_COUNT" ] && [ "$ADDED_COUNT" -gt 0 ]; then
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("**New Cars Added: $ADDED_COUNT**")
-          echo "$DIFF_REPORT_RAW" | grep '^ADDED_ITEM:' | sed 's/^ADDED_ITEM: /- **+** /' | while read -r line; do
-            FORMATTED_LINES+=("$line")
-          done
-        fi
-
-        # Process removed cars
-        REMOVED_COUNT=$(echo "$DIFF_REPORT_RAW" | grep '^REMOVED_COUNT:' | sed 's/^REMOVED_COUNT: //')
-        if [ -n "$REMOVED_COUNT" ] && [ "$REMOVED_COUNT" -gt 0 ]; then
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("**Cars Removed: $REMOVED_COUNT**")
-          echo "$DIFF_REPORT_RAW" | grep '^REMOVED_ITEM:' | sed 's/^REMOVED_ITEM: /- **-** /' | while read -r line; do
-            FORMATTED_LINES+=("$line")
-          done
-        fi
-
-        # Process modified cars
-        MODIFIED_COUNT=$(echo "$DIFF_REPORT_RAW" | grep '^MODIFIED_COUNT:' | sed 's/^MODIFIED_COUNT: //')
-        if [ -n "$MODIFIED_COUNT" ] && [ "$MODIFIED_COUNT" -gt 0 ]; then
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("**Cars Modified: $MODIFIED_COUNT**")
-          CURRENT_MODIFIED_ITEM=""
-          echo "$DIFF_REPORT_RAW" | while read -r line; do
-            if [[ "$line" =~ ^MODIFIED_ITEM: ]]; then
-              FORMATTED_LINES+=("- **~** $(echo "$line" | sed 's/^MODIFIED_ITEM: //')")
+        IFS=$'\n' # Set Internal Field Separator to newline to read lines correctly
+        for line in $DIFF_REPORT_RAW; do
+            if [[ "$line" =~ ^REPORT_HEADER: ]]; then
+                HEADER=$(echo "$line" | sed 's/^REPORT_HEADER: //')
+                FORMATTED_LINES+=("### $HEADER")
+            elif [[ "$line" =~ ^ADDED_COUNT:([0-9]+) ]]; then
+                ADDED_COUNT="${BASH_REMATCH[1]}"
+                if [ "$ADDED_COUNT" -gt 0 ]; then
+                  FORMATTED_LINES+=("") # Blank line for spacing
+                  FORMATTED_LINES+=("**New Cars Added: $ADDED_COUNT**")
+                  CHANGES_DETECTED=true
+                fi
+            elif [[ "$line" =~ ^ADDED_ITEM: ]]; then
+                FORMATTED_LINES+=("- **+** $(echo "$line" | sed 's/^ADDED_ITEM: //')")
+            elif [[ "$line" =~ ^REMOVED_COUNT:([0-9]+) ]]; then
+                REMOVED_COUNT="${BASH_REMATCH[1]}"
+                if [ "$REMOVED_COUNT" -gt 0 ]; then
+                  FORMATTED_LINES+=("") # Blank line for spacing
+                  FORMATTED_LINES+=("**Cars Removed: $REMOVED_COUNT**")
+                  CHANGES_DETECTED=true
+                fi
+            elif [[ "$line" =~ ^REMOVED_ITEM: ]]; then
+                FORMATTED_LINES+=("- **-** $(echo "$line" | sed 's/^REMOVED_ITEM: //')")
+            elif [[ "$line" =~ ^MODIFIED_COUNT:([0-9]+) ]]; then
+                MODIFIED_COUNT="${BASH_REMATCH[1]}"
+                if [ "$MODIFIED_COUNT" -gt 0 ]; then
+                  FORMATTED_LINES+=("") # Blank line for spacing
+                  FORMATTED_LINES+=("**Cars Modified: $MODIFIED_COUNT**")
+                  CHANGES_DETECTED=true
+                fi
+            elif [[ "$line" =~ ^MODIFIED_ITEM: ]]; then
+                FORMATTED_LINES+=("- **~** $(echo "$line" | sed 's/^MODIFIED_ITEM: //')")
             elif [[ "$line" =~ ^MODIFIED_DETAIL: ]]; then
-              DETAIL_LINE=$(echo "$line" | sed -E 's/^MODIFIED_DETAIL:[[:space:]]+([^:]+): (.+) -> (.+)/  - *\1*: Changed from `\2` to `\3`/')
-              FORMATTED_LINES+=("$DETAIL_LINE")
+                DETAIL_LINE=$(echo "$line" | sed -E 's/^MODIFIED_DETAIL:[[:space:]]+([^:]+): (.+) -> (.+)/  - *\1*: Changed from `\2` to `\3`/')
+                FORMATTED_LINES+=("$DETAIL_LINE")
+            elif [[ "$line" =~ ^NO_CHANGES: ]]; then
+                NO_CHANGES=$(echo "$line" | sed 's/^NO_CHANGES: //')
+                FORMATTED_LINES+=("") # Blank line for spacing
+                FORMATTED_LINES+=("*$NO_CHANGES*")
+            elif [[ "$line" =~ ^INITIAL_LOAD: ]]; then
+                INITIAL_LOAD=$(echo "$line" | sed 's/^INITIAL_LOAD: //')
+                FORMATTED_LINES+=("") # Blank line for spacing
+                FORMATTED_LINES+=("### Initial Inventory Load")
+                FORMATTED_LINES+=("* $INITIAL_LOAD")
             fi
-          done
-        fi
+        done
+        unset IFS # Restore IFS
 
-        # Process no changes
-        NO_CHANGES=$(echo "$DIFF_REPORT_RAW" | grep '^NO_CHANGES:' | sed 's/^NO_CHANGES: //')
-        if [ -n "$NO_CHANGES" ]; then
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("*$NO_CHANGES*")
-        fi
-
-        # Process initial load
-        INITIAL_LOAD=$(echo "$DIFF_REPORT_RAW" | grep '^INITIAL_LOAD:' | sed 's/^INITIAL_LOAD: //')
-        if [ -n "$INITIAL_LOAD" ]; then
-          FORMATTED_LINES+=("") # Blank line for spacing
-          FORMATTED_LINES+=("### Initial Inventory Load")
-          FORMATTED_LINES+=("* $INITIAL_LOAD")
-        fi
-        
         # Join the array elements with newline for the final message
         printf -v DISCORD_MESSAGE '%s\n' "${FORMATTED_LINES[@]}"
         
@@ -148,6 +142,9 @@ jobs:
         echo "discord_message_content<<EOF_MSG" >> "$GITHUB_OUTPUT"
         echo -e "${DISCORD_MESSAGE}" >> "$GITHUB_OUTPUT"
         echo "EOF_MSG" >> "$GITHUB_OUTPUT"
+        
+        # Also output the CHANGES_DETECTED flag for conditional Discord notification
+        echo "changes_detected=$CHANGES_DETECTED" >> "$GITHUB_OUTPUT"
       shell: bash
 
     - name: Save current inventory to file
@@ -196,7 +193,7 @@ jobs:
         fi
 
     - name: Send Discord notification (if changes detected)
-      if: contains(steps.parse_output.outputs.diff_report_str, 'REPORT_HEADER:') && !contains(steps.parse_output.outputs.diff_report_str, 'NO_CHANGES:')
+      if: steps.format_discord_message.outputs.changes_detected == 'true'
       uses: tsickert/discord-webhook@v3.0.0
       with:
         webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
