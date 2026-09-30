@@ -24,7 +24,7 @@ HEADERS = {
 
 def get_dynamic_nonce(main_site_url, headers):
     """Fetches the main page and extracts the dynamic nonce using a robust search."""
-    print(f"[*] Attempting GET request to: {main_site_url} to retrieve nonce.")
+    # print(f"[*] Attempting GET request to: {main_site_url} to retrieve nonce.")
     try:
         response = requests.get(main_site_url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -36,18 +36,18 @@ def get_dynamic_nonce(main_site_url, headers):
         match = nonce_pattern.search(full_html)
         if match:
             dynamic_nonce = match.group(1)
-            print(f"[*] Successfully extracted dynamic nonce: {dynamic_nonce}")
+            # print(f"[*] Successfully extracted dynamic nonce: {dynamic_nonce}")
             return dynamic_nonce
         else:
-            print("[-] Could not find the dynamic nonce on the page.")
+            # print("[-] Could not find the dynamic nonce on the page.")
             return None
     except requests.RequestException as e:
-        print(f"[-] Network connection error while fetching nonce: {e}")
+        # print(f"[-] Network connection error while fetching nonce: {e}")
         return None
 
 def fetch_inventory_html(dynamic_nonce):
     """Fetches the live inventory webpage using a POST request with form parameters."""
-    print(f"[*] Attempting POST request to: {AJAX_URL} with dynamic nonce.")
+    # print(f"[*] Attempting POST request to: {AJAX_URL} with dynamic nonce.")
 
     # Form data provided by the user
     form_data = {
@@ -67,7 +67,7 @@ def fetch_inventory_html(dynamic_nonce):
         response.raise_for_status()
         return response.text
     except requests.RequestException as e:
-        print(f"[-] Network connection error: {e}")
+        # print(f"[-] Network connection error: {e}")
         return None
 
 def scan_and_extract_inventory(html):
@@ -78,12 +78,12 @@ def scan_and_extract_inventory(html):
     inventory_table = soup.find("table", class_="yardconnect-vehicles-table")
 
     if inventory_table:
-        print("[*] Found the inventory table. Extracting all car data...")
+        # print("[*] Found the inventory table. Extracting all car data...")
         tbody = inventory_table.find("tbody")
         if tbody:
             rows = tbody.find_all("tr")
             if rows:
-                print(f"[*] Found {len(rows)} car entries in total.")
+                # print(f"[*] Found {len(rows)} car entries in total.")
                 for row in rows:
                     cells = row.find_all("td") 
                     if cells and len(cells) >= 8:
@@ -99,14 +99,18 @@ def scan_and_extract_inventory(html):
                         }
                         all_cars_data.append(car_data)
                     elif cells:
-                        print(f"[!] Warning: Insufficient data columns for a row: {[cell.get_text(strip=True) for cell in cells]}")
-                print(f"[*] Successfully extracted {len(all_cars_data)} car entries.")
+                        # print(f"[!] Warning: Insufficient data columns for a row: {[cell.get_text(strip=True) for cell in cells]}")
+                        pass
+                # print(f"[*] Successfully extracted {len(all_cars_data)} car entries.")
             else:
-                print("[-] No <tr> elements found within the <tbody> of the inventory table.")
+                # print("[-] No <tr> elements found within the <tbody> of the inventory table.")
+                pass
         else:
-            print("[-] No <tbody> found within the inventory table.")
+            # print("[-] No <tbody> found within the inventory table.")
+            pass
     else:
-        print("[-] Could not find the inventory table with class 'yardconnect-vehicles-table'.")
+        # print("[-] Could not find the inventory table with class 'yardconnect-vehicles-table'.")
+        pass
     return all_cars_data
 
 def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
@@ -114,9 +118,10 @@ def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
     try:
         with open(filename, 'w') as f:
             json.dump(cars_data, f, indent=4)
-        print(f"[*] Car data saved to {filename}")
+        # print(f"[*] Car data saved to {filename}")
     except IOError as e:
-        print(f"[-] Error saving car data to JSON: {e}")
+        # print(f"[-] Error saving car data to JSON: {e}")
+        pass
 
 def load_cars_from_json(filename=CAR_DATA_FILE):
     """Loads car data from a JSON file."""
@@ -125,9 +130,11 @@ def load_cars_from_json(filename=CAR_DATA_FILE):
             with open(filename, 'r') as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            print(f"[-] Error decoding JSON from {filename}: {e}")
+            # print(f"[-] Error decoding JSON from {filename}: {e}")
+            pass
         except IOError as e:
-            print(f"[-] Error loading car data from JSON: {e}")
+            # print(f"[-] Error loading car data from JSON: {e}")
+            pass
     return []
 
 def get_car_unique_key(car):
@@ -199,7 +206,7 @@ def generate_diff_report(added_cars, removed_cars, modified_cars):
 def process_inventory_update(previous_cars_json_str=None):
     """
     Fetches current car inventory, compares it with previous inventory,
-    and returns the current inventory JSON string and a diff report string.
+    and returns the current inventory (list of dicts) and a diff report string.
 
     Args:
         previous_cars_json_str (str, optional): A JSON string representing the
@@ -207,24 +214,26 @@ def process_inventory_update(previous_cars_json_str=None):
 
     Returns:
         tuple: A tuple containing:
-               - current_cars_json_str (str): JSON string of the current car inventory.
+               - current_cars (list): List of dictionaries for the current car inventory.
                - diff_report_str (str): A human-readable string summarizing the changes.
     """
     previous_cars = []
     if previous_cars_json_str:
         try:
             previous_cars = json.loads(previous_cars_json_str)
-            print(f"[*] Loaded {len(previous_cars)} previous car entries from input JSON string.")
+            # print(f"[*] Loaded {len(previous_cars)} previous car entries from input JSON string.")
         except json.JSONDecodeError as e:
-            print(f"[-] Error decoding previous_cars_json_str: {e}. Proceeding without previous data.")
+            sys.stderr.write(f"[-] Error decoding previous_cars_json_str: {e}. Proceeding without previous data.\n")
 
     dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_URL, HEADERS)
     if not dynamic_nonce_value:
-        return json.dumps(previous_cars), "Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory."
+        sys.stderr.write("[-] Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory.\n")
+        return previous_cars, "Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory."
 
     html = fetch_inventory_html(dynamic_nonce_value)
     if not html:
-        return json.dumps(previous_cars), "Error: Failed to fetch inventory HTML."
+        sys.stderr.write("[-] Error: Failed to fetch inventory HTML.\n")
+        return previous_cars, "Error: Failed to fetch inventory HTML."
 
     current_cars = scan_and_extract_inventory(html)
 
@@ -234,4 +243,21 @@ def process_inventory_update(previous_cars_json_str=None):
         added, removed, modified = compute_car_diff(previous_cars, current_cars)
         diff_report_str = generate_diff_report(added, removed, modified)
 
-    return json.dumps(current_cars), diff_report_str
+    return current_cars, diff_report_str
+
+# --- Command-line execution for GitHub Actions ---
+if __name__ == "__main__":
+    previous_cars_json_input = None
+    # Check if previous_cars_json_str is passed as a command-line argument
+    if len(sys.argv) > 1:
+        previous_cars_json_input = sys.argv[1]
+
+    current_cars_data, diff_report_output = process_inventory_update(previous_cars_json_input)
+
+    # Prepare output as a JSON object for easy parsing by GitHub Actions
+    # This JSON object will be printed to stdout.
+    output = {
+        "current_inventory": current_cars_data,
+        "diff_report": diff_report_output
+    }
+    print(json.dumps(output))
