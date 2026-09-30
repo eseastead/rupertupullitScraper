@@ -1,3 +1,8 @@
+## GitHub Actions Workflow Configuration (`.github/workflows/scrape_inventory.yml`)
+
+Save the content below to `.github/workflows/scrape_inventory.yml` in your repository. Remember to replace `inventory_scraper.py` with the actual filename of your Python script (content of `ymUqaWGOrrj1`).
+
+```yaml
 name: Daily Car Inventory Scraper
 
 on:
@@ -81,7 +86,7 @@ jobs:
     - name: Format Discord message
       id: format_discord_message
       run: |
-        python format_discord_message.py ${{ steps.parse_output.outputs.diff_report_filepath }}
+        python format_discord_message.py ${{ steps.parse_output.outputs.diff_report_filepath }} >> $GITHUB_OUTPUT
       shell: bash
 
     - name: Clean up raw diff report file
@@ -145,3 +150,4 @@ jobs:
         content: |
           **Car Inventory Update Detected!**
           ${{ steps.format_discord_message.outputs.discord_message_content }}
+```
