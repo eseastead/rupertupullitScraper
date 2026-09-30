@@ -24,7 +24,7 @@ HEADERS = {
 
 def get_dynamic_nonce(main_site_url, headers):
     """Fetches the main page and extracts the dynamic nonce using a robust search."""
-    # print(f"[*] Attempting GET request to: {main_site_url} to retrieve nonce.")
+    sys.stderr.write(f"[*] Attempting GET request to: {main_site_url} to retrieve nonce.\n")
     try:
         response = requests.get(main_site_url, headers=headers, timeout=15)
         response.raise_for_status()
@@ -36,18 +36,18 @@ def get_dynamic_nonce(main_site_url, headers):
         match = nonce_pattern.search(full_html)
         if match:
             dynamic_nonce = match.group(1)
-            # print(f"[*] Successfully extracted dynamic nonce: {dynamic_nonce}")
+            sys.stderr.write(f"[*] Successfully extracted dynamic nonce: {dynamic_nonce}\n")
             return dynamic_nonce
         else:
-            # print("[-] Could not find the dynamic nonce on the page.")
+            sys.stderr.write("[-] Could not find the dynamic nonce on the page.\n")
             return None
     except requests.RequestException as e:
-        # print(f"[-] Network connection error while fetching nonce: {e}")
+        sys.stderr.write(f"[-] Network connection error while fetching nonce: {e}\n")
         return None
 
 def fetch_inventory_html(dynamic_nonce):
     """Fetches the live inventory webpage using a POST request with form parameters."""
-    # print(f"[*] Attempting POST request to: {AJAX_URL} with dynamic nonce.")
+    sys.stderr.write(f"[*] Attempting POST request to: {AJAX_URL} with dynamic nonce.\n")
 
     # Form data provided by the user
     form_data = {
@@ -67,7 +67,7 @@ def fetch_inventory_html(dynamic_nonce):
         response.raise_for_status()
         return response.text
     except requests.RequestException as e:
-        # print(f"[-] Network connection error: {e}")
+        sys.stderr.write(f"[-] Network connection error: {e}\n")
         return None
 
 def scan_and_extract_inventory(html):
@@ -78,12 +78,12 @@ def scan_and_extract_inventory(html):
     inventory_table = soup.find("table", class_="yardconnect-vehicles-table")
 
     if inventory_table:
-        # print("[*] Found the inventory table. Extracting all car data...")
+        sys.stderr.write("[*] Found the inventory table. Extracting all car data...\n")
         tbody = inventory_table.find("tbody")
         if tbody:
             rows = tbody.find_all("tr")
             if rows:
-                # print(f"[*] Found {len(rows)} car entries in total.")
+                sys.stderr.write(f"[*] Found {len(rows)} car entries in total.\n")
                 for row in rows:
                     cells = row.find_all("td")
                     if cells and len(cells) >= 8:
@@ -99,17 +99,17 @@ def scan_and_extract_inventory(html):
                         }
                         all_cars_data.append(car_data)
                     elif cells:
-                        # print(f"[!] Warning: Insufficient data columns for a row: {[cell.get_text(strip=True) for cell in cells]}")
+                        sys.stderr.write(f"[!] Warning: Insufficient data columns for a row: {[cell.get_text(strip=True) for cell in cells]}\n")
                         pass
-                # print(f"[*] Successfully extracted {len(all_cars_data)} car entries.")
+                sys.stderr.write(f"[*] Successfully extracted {len(all_cars_data)} car entries.\n")
             else:
-                # print("[-] No <tr> elements found within the <tbody> of the inventory table.")
+                sys.stderr.write("[-] No <tr> elements found within the <tbody> of the inventory table.\n")
                 pass
         else:
-            # print("[-] No <tbody> found within the inventory table.")
+            sys.stderr.write("[-] No <tbody> found within the inventory table.\n")
             pass
     else:
-        # print("[-] Could not find the inventory table with class 'yardconnect-vehicles-table'.")
+        sys.stderr.write("[-] Could not find the inventory table with class 'yardconnect-vehicles-table'.\n")
         pass
     return all_cars_data
 
@@ -118,9 +118,9 @@ def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
     try:
         with open(filename, 'w') as f:
             json.dump(cars_data, f, indent=4)
-        # print(f"[*] Car data saved to {filename}")
+        sys.stderr.write(f"[*] Car data saved to {filename}\n")
     except IOError as e:
-        # print(f"[-] Error saving car data to JSON: {e}")
+        sys.stderr.write(f"[-] Error saving car data to JSON: {e}\n")
         pass
 
 def load_cars_from_json(filename=CAR_DATA_FILE):
@@ -130,10 +130,10 @@ def load_cars_from_json(filename=CAR_DATA_FILE):
             with open(filename, 'r') as f:
                 return json.load(f)
         except json.JSONDecodeError as e:
-            # print(f"[-] Error decoding JSON from {filename}: {e}")
+            sys.stderr.write(f"[-] Error decoding JSON from {filename}: {e}\n")
             pass
         except IOError as e:
-            # print(f"[-] Error loading car data from JSON: {e}")
+            sys.stderr.write(f"[-] Error loading car data from JSON: {e}\n")
             pass
     return []
 
@@ -222,7 +222,7 @@ def process_inventory_update(previous_cars_filepath=None):
         try:
             with open(previous_cars_filepath, 'r') as f:
                 previous_cars = json.load(f)
-            # print(f"[*] Loaded {len(previous_cars)} previous car entries from file: {previous_cars_filepath}.")
+            sys.stderr.write(f"[*] Loaded {len(previous_cars)} previous car entries from file: {previous_cars_filepath}.\n")
         except (json.JSONDecodeError, IOError) as e:
             sys.stderr.write(f"[-] Error loading or decoding previous car data from {previous_cars_filepath}: {e}. Proceeding without previous data.\n")
     elif previous_cars_filepath: # Path was provided but file does not exist
@@ -264,3 +264,4 @@ if __name__ == "__main__":
         "diff_report": diff_report_output
     }
     print(json.dumps(output))
+    sys.stderr.write("Script finished execution.\n")
