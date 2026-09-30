@@ -78,12 +78,12 @@ def scan_and_extract_inventory(html):
     inventory_table = soup.find("table", class_="yardconnect-vehicles-table")
 
     if inventory_table:
-        sys.stderr.write("[*] Found the inventory table. Extracting all car data...\n")
+        sys.stderr.write("[_] Found the inventory table. Extracting all car data...\n")
         tbody = inventory_table.find("tbody")
         if tbody:
             rows = tbody.find_all("tr")
             if rows:
-                sys.stderr.write(f"[*] Found {len(rows)} car entries in total.\n")
+                sys.stderr.write(f"[_] Found {len(rows)} car entries in total.\n")
                 for row in rows:
                     cells = row.find_all("td")
                     if cells and len(cells) >= 8:
@@ -101,7 +101,7 @@ def scan_and_extract_inventory(html):
                     elif cells:
                         sys.stderr.write(f"[!] Warning: Insufficient data columns for a row: {[cell.get_text(strip=True) for cell in cells]}\n")
                         pass
-                sys.stderr.write(f"[*] Successfully extracted {len(all_cars_data)} car entries.\n")
+                sys.stderr.write(f"[_] Successfully extracted {len(all_cars_data)} car entries.\n")
             else:
                 sys.stderr.write("[-] No <tr> elements found within the <tbody> of the inventory table.\n")
                 pass
@@ -118,7 +118,7 @@ def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
     try:
         with open(filename, 'w') as f:
             json.dump(cars_data, f, indent=4)
-        sys.stderr.write(f"[*] Car data saved to {filename}\n")
+        sys.stderr.write(f"[_] Car data saved to {filename}\n")
     except IOError as e:
         sys.stderr.write(f"[-] Error saving car data to JSON: {e}\n")
         pass
@@ -174,33 +174,31 @@ def compute_car_diff(previous_cars, current_cars):
     return added_cars, removed_cars, modified_cars
 
 def generate_diff_report(added_cars, removed_cars, modified_cars):
-    """Generates a human-readable diff report string."""
+    """Generates a human-readable diff report string formatted with markdown."""
     report_lines = []
-    report_lines.append(f"--- Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')}) ---")
+    report_lines.append(f"### Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
 
     if added_cars:
-        report_lines.append(f"\n[*] {len(added_cars)} new cars added:")
+        report_lines.append(f"\n**New Cars Added: {len(added_cars)}**")
         for car in added_cars:
-            report_lines.append(f"    + {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})") # Include Date Set for better identification
+            report_lines.append(f"- **+** {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})")
 
     if removed_cars:
-        report_lines.append(f"\n[*] {len(removed_cars)} cars removed:")
+        report_lines.append(f"\n**Cars Removed: {len(removed_cars)}**")
         for car in removed_cars:
-            report_lines.append(f"    - {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})") # Include Date Set
+            report_lines.append(f"- **-** {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})")
 
     if modified_cars:
-        report_lines.append(f"\n[*] {len(modified_cars)} cars modified:")
+        report_lines.append(f"\n**Cars Modified: {len(modified_cars)}**")
         for change in modified_cars:
-            report_lines.append(f"    ~ {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} (Date Set: {change['current']['Date Set']})") # Include Date Set
+            report_lines.append(f"- **~** {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} (Date Set: {change['current']['Date Set']})")
             for field, current_value in change['current'].items():
                 if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail', 'Date Set'] and change['previous'].get(field) != current_value:
-                    report_lines.append(f"        - {field}: {change['previous'].get(field)}")
-                    report_lines.append(f"        + {field}: {current_value}")
+                    report_lines.append(f"  - *{field}*: Changed from `{change['previous'].get(field)}` to `{current_value}`")
 
     if not (added_cars or removed_cars or modified_cars):
-        report_lines.append("\n[*] No changes detected in the inventory.")
+        report_lines.append("\n*No changes detected in the inventory.*")
 
-    report_lines.append("------------------------------------------")
     return "\n".join(report_lines)
 
 def process_inventory_update(previous_cars_filepath=None):
@@ -222,13 +220,13 @@ def process_inventory_update(previous_cars_filepath=None):
         try:
             with open(previous_cars_filepath, 'r') as f:
                 previous_cars = json.load(f)
-            sys.stderr.write(f"[*] Loaded {len(previous_cars)} previous car entries from file: {previous_cars_filepath}.\n")
+            sys.stderr.write(f"[_] Loaded {len(previous_cars)} previous car entries from file: {previous_cars_filepath}.\n")
         except (json.JSONDecodeError, IOError) as e:
             sys.stderr.write(f"[-] Error loading or decoding previous car data from {previous_cars_filepath}: {e}. Proceeding without previous data.\n")
     elif previous_cars_filepath: # Path was provided but file does not exist
         sys.stderr.write(f"[-] Previous inventory file not found at {previous_cars_filepath}. Proceeding without previous data.\n")
 
-    dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_URL, HEADERS)
+    dynamic_nonce_value = get_dynamic_nonce(MAIN_SITE_url, HEADERS)
     if not dynamic_nonce_value:
         sys.stderr.write("[-] Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory.\n")
         return previous_cars, "Error: Failed to retrieve dynamic nonce. Cannot fetch current inventory."
@@ -241,7 +239,7 @@ def process_inventory_update(previous_cars_filepath=None):
     current_cars = scan_and_extract_inventory(html)
 
     if not previous_cars:
-        diff_report_str = f"[*] No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
+        diff_report_str = f"### Initial Inventory Load\n\n* No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
     else:
         added, removed, modified = compute_car_diff(previous_cars, current_cars)
         diff_report_str = generate_diff_report(added, removed, modified)
