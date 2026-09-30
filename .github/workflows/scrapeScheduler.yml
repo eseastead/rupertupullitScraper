@@ -1,5 +1,3 @@
-## GitHub Actions Workflow Configuration (`.github/workflows/scrape_inventory.yml`)
-
 name: Daily Car Inventory Scraper
 
 on:
@@ -73,7 +71,9 @@ jobs:
         DIFF_REPORT=$(jq -r '.diff_report' script_output.json)
         
         echo "current_inventory_json=$CURRENT_INVENTORY" >> "$GITHUB_OUTPUT"
-        echo "diff_report_str=$DIFF_REPORT" >> "$GITHUB_OUTPUT"
+        echo "diff_report_str<<EOF" >> "$GITHUB_OUTPUT"
+        echo "$DIFF_REPORT" >> "$GITHUB_OUTPUT"
+        echo "EOF" >> "$GITHUB_OUTPUT"
       shell: bash
 
     - name: Save current inventory to file
@@ -122,8 +122,8 @@ jobs:
         fi
 
     - name: Send Discord notification (if changes detected)
-      if: contains(steps.parse_output.outputs.diff_report_str, '--- Inventory Change Report') && !contains(steps.parse_output.outputs.diff_report_str, 'No changes detected')
+      if: contains(steps.parse_output.outputs.diff_report_str, '### Inventory Change Report') && !contains(steps.parse_output.outputs.diff_report_str, 'No changes detected')
       uses: tsickert/discord-webhook@v3.0.0
       with:
         webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-        content: "**Car Inventory Update Detected!**\n\n```\n${{ steps.parse_output.outputs.diff_report_str }}\n```"
+        content: "**Car Inventory Update Detected!**\n\n```markdown\n${{ steps.parse_output.outputs.diff_report_str }}\n```"
