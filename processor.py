@@ -174,30 +174,30 @@ def compute_car_diff(previous_cars, current_cars):
     return added_cars, removed_cars, modified_cars
 
 def generate_diff_report(added_cars, removed_cars, modified_cars):
-    """Generates a human-readable diff report string formatted with markdown."""
+    """Generates a plain-text diff report string suitable for external formatting."""
     report_lines = []
-    report_lines.append(f"### Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
+    report_lines.append(f"REPORT_HEADER: Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
 
     if added_cars:
-        report_lines.append(f"\n**New Cars Added: {len(added_cars)}**")
+        report_lines.append(f"ADDED_COUNT: {len(added_cars)}")
         for car in added_cars:
-            report_lines.append(f"- **+** {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})")
+            report_lines.append(f"ADDED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
 
     if removed_cars:
-        report_lines.append(f"\n**Cars Removed: {len(removed_cars)}**")
+        report_lines.append(f"REMOVED_COUNT: {len(removed_cars)}")
         for car in removed_cars:
-            report_lines.append(f"- **-** {car['Make']} {car['Model']} {car['Year']} (Date Set: {car['Date Set']})")
+            report_lines.append(f"REMOVED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
 
     if modified_cars:
-        report_lines.append(f"\n**Cars Modified: {len(modified_cars)}**")
+        report_lines.append(f"MODIFIED_COUNT: {len(modified_cars)}")
         for change in modified_cars:
-            report_lines.append(f"- **~** {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} (Date Set: {change['current']['Date Set']})")
+            report_lines.append(f"MODIFIED_ITEM: {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} | Date Set: {change['current']['Date Set']}")
             for field, current_value in change['current'].items():
                 if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail', 'Date Set'] and change['previous'].get(field) != current_value:
-                    report_lines.append(f"  - *{field}*: Changed from `{change['previous'].get(field)}` to `{current_value}`")
+                    report_lines.append(f"MODIFIED_DETAIL:   {field}: {change['previous'].get(field)} -> {current_value}")
 
     if not (added_cars or removed_cars or modified_cars):
-        report_lines.append("\n*No changes detected in the inventory.*")
+        report_lines.append("NO_CHANGES: No changes detected in the inventory.")
 
     return "\n".join(report_lines)
 
@@ -239,7 +239,7 @@ def process_inventory_update(previous_cars_filepath=None):
     current_cars = scan_and_extract_inventory(html)
 
     if not previous_cars:
-        diff_report_str = f"### Initial Inventory Load\n\n* No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
+        diff_report_str = f"INITIAL_LOAD: No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
     else:
         added, removed, modified = compute_car_diff(previous_cars, current_cars)
         diff_report_str = generate_diff_report(added, removed, modified)
