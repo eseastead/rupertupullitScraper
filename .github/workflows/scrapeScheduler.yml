@@ -142,6 +142,4 @@ jobs:
       uses: tsickert/discord-webhook@v3.0.0
       with:
         webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-        content: |
-          **Car Inventory Update Detected!**
-          ${{ steps.format_discord_message.outputs.discord_message_content }}
+        content: ${{ fromJson(steps.format_discord_message.outputs.discord_message_content) }}
