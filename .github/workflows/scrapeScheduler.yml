@@ -1,103 +1,79 @@
-name: Ruperts Scrape Scheduler
+name: Daily Car Inventory Scraper
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Runs every day at 00:00 UTC
+    # Runs daily at 00:00 UTC
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
+env:
+  PYTHON_SCRIPT_NAME: processor.py # Adjust this if your Python script has a different name
+
 jobs:
-  run-script:
+  scrape_and_report:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        pip install requests beautifulsoup4
+
+    - name: Read previous inventory or initialize empty
+      id: read_previous_inventory
+      run: |
+        if [ -f "${{ env.CAR_DATA_FILE }}" ]; then
+          PREVIOUS_CARS=$(cat ${{ env.CAR_DATA_FILE }})
+        else
+          PREVIOUS_CARS="[]"
+        fi
+        echo "previous_cars_json=$PREVIOUS_OUTPUT"
+      env:
+        CAR_DATA_FILE: car_inventory.json # Use the CAR_DATA_FILE constant from your script
+
+    - name: Run inventory scraper script
+      id: run_scraper
+      run: |
+        # Pass the previous_cars_json as a command-line argument to the Python script
+        # The script's JSON output will be captured
+        OUTPUT=$(python ${{ env.PYTHON_SCRIPT_NAME }} \
+          '${{ steps.read_previous_inventory.outputs.previous_cars_json }}')
         
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-          
-      - name: Install dependencies
-        run: |
-          if [ -s requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
+        echo "$OUTPUT" > script_output.json
+        echo "Current inventory and diff report generated."
+
+    - name: Parse script output
+      id: parse_output
+      run: |
+        CURRENT_INVENTORY=$(jq -c '.current_inventory' script_output.json)
+        DIFF_REPORT=$(jq -r '.diff_report' script_output.json)
         
-      - name: Execute Script
-        run: python processor.py
+        echo "current_inventory_json=$CURRENT_INVENTORY" >> "$GITHUB_OUTPUT"
+        echo "diff_report_str=$DIFF_REPORT" >> "$GITHUB_OUTPUT"
+      shell: bash
 
-      - name: Send diff report to Discord
-        if: ${{ hashFiles('diff_report.txt') != '' }}
-        env:
-          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: |
-          if [ ! -s diff_report.txt ]; then
-            echo "diff_report.txt is empty; skipping Discord notification."
-            exit 0
-          fi
+    - name: Save current inventory to file
+      run: |
+        echo '${{ steps.parse_output.outputs.current_inventory_json }}' > car_inventory.json
 
-          python - <<'PY'
-          import json
-          import os
-          import urllib.request
+    - name: Commit and push changes if any
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add car_inventory.json
+        git diff --quiet --exit-code || \
+          (git commit -m "Update car inventory" && git push)
 
-          webhook = os.environ["DISCORD_WEBHOOK"]
-          with open("diff_report.txt", "r", encoding="utf-8") as f:
-              report = f.read().strip()
-
-          if not report:
-              raise SystemExit(0)
-
-          payload = {
-              "content": (
-                  "**📊 Inventory Sync Report**\n"
-                  "```text\n"
-                  f"{report}\n"
-                  "```"
-              )
-          }
-
-          req = urllib.request.Request(
-              webhook,
-              data=json.dumps(payload).encode("utf-8"),
-              headers={"Content-Type": "application/json"},
-              method="POST",
-          )
-
-          with urllib.request.urlopen(req) as response:
-              response.read()
-          PY
-
-      - name: Commit and Push Data Products
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@://github.com"
-
-          PREVIOUS_INVENTORY_EMPTY=false
-
-          if git cat-file -e HEAD:car_inventory.json 2>/dev/null; then
-            if [ "$(git show HEAD:car_inventory.json | wc -c)" -eq 0 ]; then
-              PREVIOUS_INVENTORY_EMPTY=true
-            fi
-          else
-            PREVIOUS_INVENTORY_EMPTY=true
-          fi
-
-          # Safely stage files only if they exist
-          [ -f car_inventory.json ] && git add car_inventory.json
-          [ -f diff_report.txt ] && git add diff_report.txt
-
-          if git diff --staged --quiet; then
-            if [ "$PREVIOUS_INVENTORY_EMPTY" = "true" ] && [ -f car_inventory.json ] && [ -s car_inventory.json ]; then
-              echo "Previous inventory was empty; forcing initial save."
-              git commit -m "Automated inventory sync: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-              git push origin HEAD:${{ github.ref_name }}
-            else
-              echo "No data changes detected today. Skipping push."
-            fi
-          else
-            git commit -m "Automated inventory sync: $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
-            git push origin HEAD:${{ github.ref_name }}
-          fi
+    - name: Send Discord notification (if changes detected)
+      if: contains(steps.parse_output.outputs.diff_report_str, '--- Inventory Change Report') && !contains(steps.parse_output.outputs.diff_report_str, 'No changes detected')
+      uses: tsickert/discord-webhook@v3.0.0
+      with:
+        webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
+        content: "**Car Inventory Update Detected!**\n\n```\n${{ steps.parse_output.outputs.diff_report_str }}\n```"
