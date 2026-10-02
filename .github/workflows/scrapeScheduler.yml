@@ -61,33 +61,17 @@ jobs:
           echo "Cleaned up $TEMP_FILE"
         fi
 
-    - name: Parse script output
+    - name: Parse script output and save diff report
       id: parse_output
       run: |
         CURRENT_INVENTORY=$(jq -c '.current_inventory' script_output.json)
         DIFF_REPORT=$(jq -r '.diff_report' script_output.json)
         
-        # Create a temporary file for the raw diff report to pass to the Python formatter
-        DIFF_REPORT_TEMP_FILE="raw_diff_report.txt"
-        echo "$DIFF_REPORT" > "$DIFF_REPORT_TEMP_FILE"
+        # Save the raw diff report to a file
+        echo "$DIFF_REPORT" > diff_report.txt
 
         echo "current_inventory_json=$CURRENT_INVENTORY" >> "$GITHUB_OUTPUT"
-        echo "diff_report_filepath=$DIFF_REPORT_TEMP_FILE" >> "$GITHUB_OUTPUT"
       shell: bash
-
-    - name: Format Discord message
-      id: format_discord_message
-      run: |
-        python format_discord_message.py ${{ steps.parse_output.outputs.diff_report_filepath }} >> $GITHUB_OUTPUT
-      shell: bash
-
-    - name: Clean up raw diff report file
-      run: |
-        DIFF_REPORT_TEMP_FILE="raw_diff_report.txt"
-        if [ -f "$DIFF_REPORT_TEMP_FILE" ]; then
-          rm "$DIFF_REPORT_TEMP_FILE"
-          echo "Cleaned up $DIFF_REPORT_TEMP_FILE"
-        fi
 
     - name: Save current inventory to file
       run: |
@@ -135,8 +119,15 @@ jobs:
         fi
 
     - name: Send Discord notification (if changes detected)
-      if: steps.format_discord_message.outputs.changes_detected == 'true'
       uses: tsickert/discord-webhook@v3.0.0
       with:
         webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-        raw-data: ${{ steps.format_discord_message.outputs.discord_message_payload }}
+        content: "Car Inventory Update Report:"
+        file-content: diff_report.txt
+
+    - name: Clean up diff report file
+      run: |
+        if [ -f "diff_report.txt" ]; then
+          rm "diff_report.txt"
+          echo "Cleaned up diff_report.txt"
+        fi
