@@ -1,14 +1,10 @@
-REPORT_HEADER: Inventory Change Report (2026-10-06 02:46:15)
-ADDED_COUNT: 12
-ADDED_ITEM: Honda Pilot 2007 | Date Set: 10/01/26
-ADDED_ITEM: Honda Accord 1999 | Date Set: 10/01/26
-ADDED_ITEM: Toyota PRIUS 2005 | Date Set: 10/01/26
-ADDED_ITEM: Subaru Impreza 2015 | Date Set: 10/01/26
-ADDED_ITEM: BMW 328i 2011 | Date Set: 10/02/26
-ADDED_ITEM: Kia Optima 2015 | Date Set: 10/02/26
-ADDED_ITEM: Toyota Highlander 2002 | Date Set: 10/02/26
-ADDED_ITEM: Mini Cooper 2009 | Date Set: 10/02/26
-ADDED_ITEM: Toyota PRIUS 2005 | Date Set: 10/02/26
-ADDED_ITEM: Subaru Legacy 2010 | Date Set: 10/02/26
-ADDED_ITEM: Subaru Legacy 2013 | Date Set: 10/02/26
-ADDED_ITEM: Acura ILX 2013 | Date Set: 10/02/26
+REPORT_HEADER: Inventory Change Report (2026-10-06 03:09:31)
+ADDED_COUNT: 8
+ADDED_ITEM: 10/02/26 | 2011 | BMW 328i | 3.0L 6cyl
+ADDED_ITEM: 10/02/26 | 2015 | Kia Optima | 2.4L 0cyl
+ADDED_ITEM: 10/02/26 | 2002 | Toyota Highlander | 3.0L 6cyl
+ADDED_ITEM: 10/02/26 | 2009 | Mini Cooper | 1.6L 4cyl
+ADDED_ITEM: 10/02/26 | 2005 | Toyota PRIUS | 1.5L 4cyl
+ADDED_ITEM: 10/02/26 | 2010 | Subaru Legacy | 2.5L 0cyl
+ADDED_ITEM: 10/02/26 | 2013 | Subaru Legacy | 2.5L 4cyl
+ADDED_ITEM: 10/02/26 | 2013 | Acura ILX | 2.0L 4cyl

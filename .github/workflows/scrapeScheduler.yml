@@ -39,22 +39,29 @@ jobs:
           python -c "import json; data=json.load(open('script_output.json')); open('diff_report.txt', 'w').write(data['diff_report'])"
           rm script_output.json
 
+      - name: Read Diff Report
+        id: read_report
+        run: |
+          echo "REPORT_CONTENT<<EOF_DIST_REPORT" >> $GITHUB_ENV
+          cat diff_report.txt >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "EOF_DIST_REPORT" >> $GITHUB_ENV
+
       - name: Upload Report to Discord
-        if: ${{ hashFiles('diff_report.txt') != '' }}
+        # Post the report's content directly to the chat channel
         uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          filename: diff_report.txt
+          content: |
+            ${{ env.REPORT_CONTENT }}
 
       - name: Commit and Push Data Products
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@://github.com"
-          
-          # Safely stage files only if they exist
-          [ -f car_inventory.json ] && git add car_inventory.json
-          [ -f diff_report.txt ] && git add diff_report.txt
-          
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add car_inventory.json diff_report.txt
+
           if git diff --staged --quiet; then
             echo "No data changes detected today. Skipping push."
           else

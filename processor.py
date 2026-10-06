@@ -204,23 +204,25 @@ def generate_diff_report(added_cars, removed_cars, modified_cars):
     report_lines = []
     report_lines.append(f"REPORT_HEADER: Inventory Change Report ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
 
+    # Fields printed in order: Date Set, Year, Model, Engine
     if added_cars:
         report_lines.append(f"ADDED_COUNT: {len(added_cars)}")
         for car in sort_cars_by_date_set(added_cars):
-            report_lines.append(f"ADDED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
+            report_lines.append(f"ADDED_ITEM: {car.get('Date Set', 'N/A')} | {car.get('Year', 'N/A')} | {car.get('Make', 'N/A')} {car.get('Model', 'N/A')} | {car.get('Engine', 'N/A')}")
 
     if removed_cars:
         report_lines.append(f"REMOVED_COUNT: {len(removed_cars)}")
         for car in sort_cars_by_date_set(removed_cars):
-            report_lines.append(f"REMOVED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
+            report_lines.append(f"REMOVED_ITEM: {car.get('Date Set', 'N/A')} | {car.get('Year', 'N/A')} | {car.get('Make', 'N/A')} {car.get('Model', 'N/A')} | {car.get('Engine', 'N/A')}")
 
     if modified_cars:
         report_lines.append(f"MODIFIED_COUNT: {len(modified_cars)}")
         # Sort modified cars using the current vehicle's Date Set
         sorted_modified = sorted(modified_cars, key=lambda x: sort_cars_by_date_set([x['current']])[0].get('Date Set', ''))
         for change in sorted_modified:
-            report_lines.append(f"MODIFIED_ITEM: {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} | Date Set: {change['current']['Date Set']}")
-            for field, current_value in change['current'].items():
+            car = change['current']
+            report_lines.append(f"MODIFIED_ITEM: {car.get('Date Set', 'N/A')} | {car.get('Year', 'N/A')} | {car.get('Make', 'N/A')} {car.get('Model', 'N/A')} | {car.get('Engine', 'N/A')}")
+            for field, current_value in car.items():
                 if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail', 'Date Set'] and change['previous'].get(field) != current_value:
                     report_lines.append(f"MODIFIED_DETAIL:   {field}: {change['previous'].get(field)} -> {current_value}")
 
