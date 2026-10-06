@@ -1,1 +1,1 @@
-Initial inventory saved. No diff to report.
+INITIAL_LOAD: No previous car data provided. Saving current 796 entries as initial dataset.
