@@ -13,20 +13,31 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-        
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-          
+
       - name: Install dependencies
         run: |
           if [ -s requirements.txt ]; then
             pip install -r requirements.txt
           fi
-        
-      - name: Execute Script
-        run: python processor.py
+
+      - name: Execute Script and Save Outputs
+        run: |
+          # Run script with existing inventory as previous_cars if it exists, and capture JSON stdout
+          if [ -f car_inventory.json ]; then
+            python processor.py car_inventory.json > script_output.json
+          else
+            python processor.py > script_output.json
+          fi
+          
+          # Extract current inventory and diff report into respective files using python's built-in json tool
+          python -c "import json; data=json.load(open('script_output.json')); json.dump(data['current_inventory'], open('car_inventory.json', 'w'), indent=4)"
+          python -c "import json; data=json.load(open('script_output.json')); open('diff_report.txt', 'w').write(data['diff_report'])"
+          rm script_output.json
 
       - name: Upload Report to Discord
         # This action automatically posts your text file to your server
@@ -39,9 +50,9 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+
           git add car_inventory.json diff_report.txt
-          
+
           if git diff --staged --quiet; then
             echo "No data changes detected today. Skipping push."
           else
