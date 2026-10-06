@@ -40,7 +40,7 @@ jobs:
           rm script_output.json
 
       - name: Upload Report to Discord
-        # This action automatically posts your text file to your server
+        if: ${{ hashFiles('diff_report.txt') != '' }}
         uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
@@ -49,10 +49,12 @@ jobs:
       - name: Commit and Push Data Products
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add car_inventory.json diff_report.txt
-
+          git config --global user.email "41898282+github-actions[bot]@://github.com"
+          
+          # Safely stage files only if they exist
+          [ -f car_inventory.json ] && git add car_inventory.json
+          [ -f diff_report.txt ] && git add diff_report.txt
+          
           if git diff --staged --quiet; then
             echo "No data changes detected today. Skipping push."
           else
