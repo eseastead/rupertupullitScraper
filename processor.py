@@ -113,11 +113,29 @@ def scan_and_extract_inventory(html):
         pass
     return all_cars_data
 
+def sort_cars_by_date_set(cars):
+    """Sorts a list of car dictionaries chronologically by 'Date Set'."""
+    def get_sort_key(car):
+        date_str = car.get("Date Set", "")
+        try:
+            # Try parsing typical formats like MM/DD/YYYY
+            return datetime.strptime(date_str, "%m/%d/%Y")
+        except ValueError:
+            try:
+                # Alternative format fallback
+                return datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                # Fallback if unparseable, return epoch start
+                return datetime.min
+
+    return sorted(cars, key=get_sort_key)
+
 def save_cars_to_json(cars_data, filename=CAR_DATA_FILE):
-    """Saves a list of car dictionaries to a JSON file."""
+    """Saves a list of car dictionaries to a JSON file, sorted by Date Set."""
+    sorted_data = sort_cars_by_date_set(cars_data)
     try:
         with open(filename, 'w') as f:
-            json.dump(cars_data, f, indent=4)
+            json.dump(sorted_data, f, indent=4)
         sys.stderr.write(f"[_] Car data saved to {filename}\n")
     except IOError as e:
         sys.stderr.write(f"[-] Error saving car data to JSON: {e}\n")
@@ -180,17 +198,19 @@ def generate_diff_report(added_cars, removed_cars, modified_cars):
 
     if added_cars:
         report_lines.append(f"ADDED_COUNT: {len(added_cars)}")
-        for car in added_cars:
+        for car in sort_cars_by_date_set(added_cars):
             report_lines.append(f"ADDED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
 
     if removed_cars:
         report_lines.append(f"REMOVED_COUNT: {len(removed_cars)}")
-        for car in removed_cars:
+        for car in sort_cars_by_date_set(removed_cars):
             report_lines.append(f"REMOVED_ITEM: {car['Make']} {car['Model']} {car['Year']} | Date Set: {car['Date Set']}")
 
     if modified_cars:
         report_lines.append(f"MODIFIED_COUNT: {len(modified_cars)}")
-        for change in modified_cars:
+        # Sort modified cars using the current vehicle's Date Set
+        sorted_modified = sorted(modified_cars, key=lambda x: x['current'].get('Date Set', ''))
+        for change in sorted_modified:
             report_lines.append(f"MODIFIED_ITEM: {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} | Date Set: {change['current']['Date Set']}")
             for field, current_value in change['current'].items():
                 if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail', 'Date Set'] and change['previous'].get(field) != current_value:
@@ -206,7 +226,7 @@ def process_inventory_update(previous_cars_filepath=None):
     Fetches current car inventory, compares it with previous inventory,
     and returns the current inventory (list of dicts) and a diff report string.
 
-    Args:
+    Args: 
         previous_cars_filepath (str, optional): A file path to a JSON file representing the
                                                  previous car inventory. Defaults to None.
 
@@ -237,6 +257,7 @@ def process_inventory_update(previous_cars_filepath=None):
         return previous_cars, "Error: Failed to fetch inventory HTML."
 
     current_cars = scan_and_extract_inventory(html)
+    current_cars = sort_cars_by_date_set(current_cars)
 
     if not previous_cars:
         diff_report_str = f"INITIAL_LOAD: No previous car data provided. Saving current {len(current_cars)} entries as initial dataset."
