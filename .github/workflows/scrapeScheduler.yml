@@ -39,12 +39,21 @@ jobs:
           python -c "import json; data=json.load(open('script_output.json')); open('diff_report.txt', 'w').write(data['diff_report'])"
           rm script_output.json
 
+      - name: Read Diff Report
+        id: read_report
+        run: |
+          # Read file content and format it for GitHub Actions environment file
+          echo "REPORT_CONTENT<<EOF" >> $GITHUB_ENV
+          cat diff_report.txt >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
       - name: Upload Report to Discord
         # Post the report's content directly to the chat channel
         uses: tsickert/discord-webhook@v7.0.0
         with:
           webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-          content-file: diff_report.txt
+          content: |
+            ${{ env.REPORT_CONTENT }}
 
       - name: Commit and Push Data Products
         run: |
