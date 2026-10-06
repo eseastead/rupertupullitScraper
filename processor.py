@@ -118,15 +118,23 @@ def sort_cars_by_date_set(cars):
     def get_sort_key(car):
         date_str = car.get("Date Set", "")
         try:
-            # Try parsing typical formats like MM/DD/YYYY
-            return datetime.strptime(date_str, "%m/%d/%Y")
+            # Try parsing with 2-digit year first, e.g., '09/25/26' -> %y
+            return datetime.strptime(date_str, "%m/%d/%y")
         except ValueError:
             try:
-                # Alternative format fallback
-                return datetime.strptime(date_str, "%Y-%m-%d")
+                # Fallback for 4-digit year format '09/25/2026' -> %Y
+                return datetime.strptime(date_str, "%m/%d/%Y")
             except ValueError:
-                # Fallback if unparseable, return epoch start
-                return datetime.min
+                try:
+                    # Fallback for alternative hyphenated 4-digit year format
+                    return datetime.strptime(date_str, "%Y-%m-%d")
+                except ValueError:
+                    try:
+                        # Fallback for alternative hyphenated 2-digit year format
+                        return datetime.strptime(date_str, "%y-%m-%d")
+                    except ValueError:
+                        # Fallback if unparseable, return epoch start
+                        return datetime.min
 
     return sorted(cars, key=get_sort_key)
 
@@ -209,7 +217,7 @@ def generate_diff_report(added_cars, removed_cars, modified_cars):
     if modified_cars:
         report_lines.append(f"MODIFIED_COUNT: {len(modified_cars)}")
         # Sort modified cars using the current vehicle's Date Set
-        sorted_modified = sorted(modified_cars, key=lambda x: x['current'].get('Date Set', ''))
+        sorted_modified = sorted(modified_cars, key=lambda x: sort_cars_by_date_set([x['current']])[0].get('Date Set', ''))
         for change in sorted_modified:
             report_lines.append(f"MODIFIED_ITEM: {change['current']['Make']} {change['current']['Model']} {change['current']['Year']} | Date Set: {change['current']['Date Set']}")
             for field, current_value in change['current'].items():
@@ -226,7 +234,7 @@ def process_inventory_update(previous_cars_filepath=None):
     Fetches current car inventory, compares it with previous inventory,
     and returns the current inventory (list of dicts) and a diff report string.
 
-    Args: 
+    Args:
         previous_cars_filepath (str, optional): A file path to a JSON file representing the
                                                  previous car inventory. Defaults to None.
 
