@@ -42,10 +42,10 @@ jobs:
       - name: Read Diff Report
         id: read_report
         run: |
-          # Read file content and format it for GitHub Actions environment file
-          echo "REPORT_CONTENT<<EOF" >> $GITHUB_ENV
+          echo "REPORT_CONTENT<<EOF_DIST_REPORT" >> $GITHUB_ENV
           cat diff_report.txt >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          echo "" >> $GITHUB_ENV
+          echo "EOF_DIST_REPORT" >> $GITHUB_ENV
 
       - name: Upload Report to Discord
         # Post the report's content directly to the chat channel
