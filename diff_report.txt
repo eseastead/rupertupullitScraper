@@ -1,10 +1,15 @@
-REPORT_HEADER: Inventory Change Report (2026-10-06 03:09:31)
-ADDED_COUNT: 8
-ADDED_ITEM: 10/02/26 | 2011 | BMW 328i | 3.0L 6cyl
-ADDED_ITEM: 10/02/26 | 2015 | Kia Optima | 2.4L 0cyl
-ADDED_ITEM: 10/02/26 | 2002 | Toyota Highlander | 3.0L 6cyl
-ADDED_ITEM: 10/02/26 | 2009 | Mini Cooper | 1.6L 4cyl
-ADDED_ITEM: 10/02/26 | 2005 | Toyota PRIUS | 1.5L 4cyl
-ADDED_ITEM: 10/02/26 | 2010 | Subaru Legacy | 2.5L 0cyl
-ADDED_ITEM: 10/02/26 | 2013 | Subaru Legacy | 2.5L 4cyl
-ADDED_ITEM: 10/02/26 | 2013 | Acura ILX | 2.0L 4cyl
+REPORT_HEADER: Inventory Change Report (2026-10-07 00:17:17)
+REMOVED_COUNT: 13
+REMOVED_ITEM: 05/13/26 | 2015 | Chrysler 300 | 3.6L 6cyl
+REMOVED_ITEM: 05/13/26 | 2025 | Jeep Compass | 2.0L 4cyl
+REMOVED_ITEM: 05/13/26 | 1994 | Dodge Dakota | 5.2L 8cyl
+REMOVED_ITEM: 05/13/26 | 2004 | Chrysler Pacifica | 3.5L 6cyl
+REMOVED_ITEM: 05/13/26 | 2001 | Dodge Grand Caravan | 3.3L 6cyl
+REMOVED_ITEM: 05/13/26 | 2010 | Dodge Avenger | 2.4L 4cyl
+REMOVED_ITEM: 05/15/26 | 2004 | Jeep Liberty | 3.7L 6cyl
+REMOVED_ITEM: 05/15/26 | 2005 | Jeep Grand Cherokee | 4.7L 8cyl
+REMOVED_ITEM: 05/19/26 | 2005 | Jeep Grand Cherokee | 5.7L 8cyl
+REMOVED_ITEM: 05/19/26 | 1996 | Jeep Cherokee | 4.0L 6cyl
+REMOVED_ITEM: 05/19/26 | 2003 | Jeep Grand Cherokee | 4.0L 6cyl
+REMOVED_ITEM: 05/20/26 | 2010 | Chrysler Town and Country | 3.8L 6cyl
+REMOVED_ITEM: 05/21/26 | 1988 | Jeep Cherokee | 4.0L 6cyl
