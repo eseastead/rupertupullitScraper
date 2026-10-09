@@ -42,7 +42,7 @@ jobs:
         echo "previous_cars_filepath=$TEMP_FILE" >> "$GITHUB_OUTPUT"
         echo "Previous inventory prepared in $TEMP_FILE"
       env:
-        CAR_DATA_FILE: car_inventory.json # Use the CAR_DATA_FILE constant from your script
+        CAR_DATA_FILE: car_inventory.json
 
     - name: Run inventory scraper script
       id: run_scraper
@@ -61,15 +61,10 @@ jobs:
           echo "Cleaned up $TEMP_FILE"
         fi
 
-    - name: Parse script output and save diff report
+    - name: Parse script output
       id: parse_output
       run: |
         CURRENT_INVENTORY=$(jq -c '.current_inventory' script_output.json)
-        DIFF_REPORT=$(jq -r '.diff_report' script_output.json)
-        
-        # Save the raw diff report to a file
-        echo "$DIFF_REPORT" > diff_report.txt
-
         echo "current_inventory_json=$CURRENT_INVENTORY" >> "$GITHUB_OUTPUT"
       shell: bash
 
@@ -90,45 +85,46 @@ jobs:
           echo "car_inventory.json exists locally after being written." >&2
         else
           echo "Error: car_inventory.json does NOT exist locally after being written! Cannot commit." >&2
-          exit 1 # Fail the step
+          exit 1
         fi
 
         git add car_inventory.json
         echo "Git add executed for car_inventory.json."
 
-        # Check if there are any changes to commit (staged changes)
         if git diff --staged --quiet; then
           echo "No changes to commit detected by git diff --staged. Skipping commit and push."
         else
           echo "Changes detected. Attempting to commit and push..."
           git commit -m "Update car inventory"
           
-          if [ $? -eq 0 ]; then # Check if commit was successful
+          if [ $? -eq 0 ]; then
             echo "Git commit successful. Attempting to push."
             git push
-            if [ $? -eq 0 ]; then # Check if push was successful
+            if [ $? -eq 0 ]; then
               echo "Successfully committed and pushed car_inventory.json."
             else
               echo "Error: Git push failed. Check repository permissions or token scopes." >&2
-              exit 1 # Fail the step
+              exit 1
             fi
           else
             echo "Error: Git commit failed." >&2
-            exit 1 # Fail the step
+            exit 1
           fi
         fi
 
-    - name: Send Discord notification (if changes detected)
-      uses: tsickert/discord-webhook@v3.0.0
-      with:
-        webhook-url: ${{ secrets.DISCORD_WEBHOOK }}
-        content: "Car Inventory Update Report:"
-        username: Rupert # Added to fix the username validation error
-        file-content: diff_report.txt
-
-    - name: Clean up diff report file
+    - name: Send Discord Notifications in Chunks
       run: |
-        if [ -f "diff_report.txt" ]; then
-          rm "diff_report.txt"
-          echo "Cleaned up diff_report.txt"
-        fi
+        # Read the list of pre-split message chunks from the JSON file
+        CHUNKS_COUNT=$(jq '.diff_report_chunks | length' script_output.json)
+        echo "Total Discord message chunks to send: $CHUNKS_COUNT"
+        
+        for ((i=0; i<CHUNKS_COUNT; i++)); do
+          # Extract the raw string of the specific index chunk
+          CHUNK_CONTENT=$(jq -r ".diff_report_chunks[$i]" script_output.json)
+          
+          # Send each chunk using a curl POST request to the webhook
+          # This avoids any issues with plugin parameters and guarantees robust delivery of chunks
+          curl -H "Content-Type: application/json" \
+               -d "$(jq -n --arg content "$CHUNK_CONTENT" --arg username "Rupert" '{content: $content, username: $username}')" \
+               "${{ secrets.DISCORD_WEBHOOK }}"
+        done
