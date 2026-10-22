@@ -127,7 +127,7 @@ def build_discord_messages(diff_struct):
     
     def add_line(line):
         nonlocal current_message, messages
-        if len(current_message) + len(line) + 1 > 1950:
+        if len(current_message) + len(line) + 1 > 1900:
             messages.append(current_message)
             current_message = ""
         current_message += line + "\n"
@@ -151,7 +151,7 @@ def build_discord_messages(diff_struct):
                 add_line(f"  - {field}: {change['from']} -> {change['to']}")
 
     if not (diff_struct["added"] or diff_struct["removed"] or diff_struct["modified"]):
-        add_line("")
+        return [] #return this empty array so i can check to stop from sending a discord update
 
     if current_message.strip():
         messages.append(current_message)
