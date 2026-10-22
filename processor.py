@@ -135,12 +135,12 @@ def build_discord_messages(diff_struct):
     if diff_struct["added"]:
         add_line(f"\n**[+] Added Cars ({len(diff_struct['added'])}):**")
         for car in diff_struct["added"]:
-            add_line(f"• {car['Make']} {car['Model']} {car['Year']} (Engine: {car['Engine']}, Set: {car['Date Set']})")
+            add_line(f"• {car['Make']} {car['Model']} {car['Year']} {car['Engine']}, Set: {car['Date Set']}")
 
     if diff_struct["removed"]:
         add_line(f"\n**[-] Removed Cars ({len(diff_struct['removed'])}):**")
         for car in diff_struct["removed"]:
-            add_line(f"• {car['Make']} {car['Model']} {car['Year']} (Engine: {car['Engine']}, Set: {car['Date Set']})")
+            add_line(f"• {car['Make']} {car['Model']} {car['Year']} {car['Engine']}, Set: {car['Date Set']}")
 
     if diff_struct["modified"]:
         add_line(f"\n**[*] Modified Cars ({len(diff_struct['modified'])}):**")
