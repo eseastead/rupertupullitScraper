@@ -32,12 +32,17 @@ jobs:
       id: read_previous_inventory
       run: |
         TEMP_FILE="previous_inventory_temp.json"
-        if [ -f "${{ env.CAR_DATA_FILE }}" ]; then
-          echo "Reading existing ${{ env.CAR_DATA_FILE }} for previous inventory."
-          cat ${{ env.CAR_DATA_FILE }} > "$TEMP_FILE"
+        FILE="${{ env.CAR_DATA_FILE }}"
+        
+        # Check if file exists, is not empty, and contains more than an empty array/null value
+        if [ -f "$FILE" ] && [ -s "$FILE" ] && [ "$(jq '. | length' "$FILE" 2>/dev/null || echo 0)" -gt 0 ]; then
+          echo "Reading existing $FILE for previous inventory."
+          cat "$FILE" > "$TEMP_FILE"
+          echo "is_initialized=true" >> "$GITHUB_OUTPUT"
         else
-          echo "${{ env.CAR_DATA_FILE }} not found. Initializing empty inventory."
+          echo "$FILE not found, empty, or uninitialized. Initializing empty inventory."
           echo "[]" > "$TEMP_FILE"
+          echo "is_initialized=false" >> "$GITHUB_OUTPUT"
         fi
         echo "previous_cars_filepath=$TEMP_FILE" >> "$GITHUB_OUTPUT"
         echo "Previous inventory prepared in $TEMP_FILE"
@@ -113,18 +118,19 @@ jobs:
         fi
 
     - name: Send Discord Notifications in Chunks
-      run: |
-        # Read the list of pre-split message chunks from the JSON file
-        CHUNKS_COUNT=$(jq '.diff_report_chunks | length' script_output.json)
-        echo "Total Discord message chunks to send: $CHUNKS_COUNT"
-        
-        for ((i=0; i<CHUNKS_COUNT; i++)); do
-          # Extract the raw string of the specific index chunk
-          CHUNK_CONTENT=$(jq -r ".diff_report_chunks[$i]" script_output.json)
+        run: |
+          # Read the list of pre-split message chunks from the JSON file
+          CHUNKS_COUNT=$(jq '.diff_report_chunks | length' script_output.json)
+          echo "Total Discord message chunks to send: $CHUNKS_COUNT"
           
-          # Send each chunk using a curl POST request to the webhook
-          # This avoids any issues with plugin parameters and guarantees robust delivery of chunks
-          curl -H "Content-Type: application/json" \
-               -d "$(jq -n --arg content "$CHUNK_CONTENT" --arg username "Rupert" '{content: $content, username: $username}')" \
-               "${{ secrets.DISCORD_WEBHOOK }}"
-        done
+          for ((i=0; i<CHUNKS_COUNT; i++)); do
+            # Extract the raw string of the specific index chunk
+            CHUNK_CONTENT=$(jq -r ".diff_report_chunks[$i]" script_output.json)
+            
+            # Send each chunk using a curl POST request to the webhook
+            # This avoids any issues with plugin parameters and guarantees robust delivery of chunks
+            curl -H "Content-Type: application/json" \
+                 -d "$(jq -n --arg content "$CHUNK_CONTENT" --arg username "Rupert" '{content: $content, username: $username}')" \
+                 "${{ secrets.DISCORD_WEBHOOK }}"
+          done
+      fi
