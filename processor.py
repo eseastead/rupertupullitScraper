@@ -87,7 +87,7 @@ def scan_and_extract_inventory(html):
     return all_cars_data
 
 def get_car_unique_key(car):
-    return f"{car['Make']}-{car['Model']}-{car['Year']}-{car['Yard Row']}"
+    return f"{car['Make']}-{car['Model']}-{car['Year']}-{car['Engine']}-{car['Yard Row']}-{car['Date Set']}"
 
 def compute_car_diff_struct(previous_cars, current_cars):
     """Compares lists and returns a structured dictionary of changes instead of flat text."""
@@ -105,7 +105,7 @@ def compute_car_diff_struct(previous_cars, current_cars):
             previous_car = previous_map[key]
             diff_fields = {}
             for field, value in current_car.items():
-                if field not in ['Make', 'Model', 'Year', 'Yard Row', 'Thumbnail'] and previous_car.get(field) != value:
+                if field not in ['Make', 'Model', 'Year', 'Engine'] and previous_car.get(field) != value:
                     diff_fields[field] = {"from": previous_car.get(field), "to": value}
             if diff_fields:
                 modified_cars.append({"car": current_car, "changes": diff_fields})
@@ -135,12 +135,12 @@ def build_discord_messages(diff_struct):
     if diff_struct["added"]:
         add_line(f"\n**[+] Added Cars ({len(diff_struct['added'])}):**")
         for car in diff_struct["added"]:
-            add_line(f"• {car['Make']} {car['Model']} {car['Year']} (Row: {car['Yard Row']}, Set: {car['Date Set']})")
+            add_line(f"• {car['Make']} {car['Model']} {car['Year']} (Engine: {car['Engine']}, Set: {car['Date Set']})")
 
     if diff_struct["removed"]:
         add_line(f"\n**[-] Removed Cars ({len(diff_struct['removed'])}):**")
         for car in diff_struct["removed"]:
-            add_line(f"• {car['Make']} {car['Model']} {car['Year']} (Row: {car['Yard Row']}, Set: {car['Date Set']})")
+            add_line(f"• {car['Make']} {car['Model']} {car['Year']} (Engine: {car['Engine']}, Set: {car['Date Set']})")
 
     if diff_struct["modified"]:
         add_line(f"\n**[*] Modified Cars ({len(diff_struct['modified'])}):**")
@@ -151,7 +151,7 @@ def build_discord_messages(diff_struct):
                 add_line(f"  - {field}: {change['from']} -> {change['to']}")
 
     if not (diff_struct["added"] or diff_struct["removed"] or diff_struct["modified"]):
-        add_line("No changes detected in the inventory.")
+        add_line("")
 
     if current_message.strip():
         messages.append(current_message)
