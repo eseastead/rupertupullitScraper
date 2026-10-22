@@ -133,4 +133,3 @@ jobs:
                  -d "$(jq -n --arg content "$CHUNK_CONTENT" --arg username "Rupert" '{content: $content, username: $username}')" \
                  "${{ secrets.DISCORD_WEBHOOK }}"
           done
-      fi
